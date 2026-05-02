@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowUpDown,
@@ -75,6 +75,13 @@ type SkillWorkspaceProps = {
 type SortMode = "updated" | "name";
 type ViewMode = "grid" | "list";
 
+const DETAIL_PANEL_DEFAULT_WIDTH = 420;
+const DETAIL_PANEL_MIN_WIDTH = 360;
+const DETAIL_PANEL_MAX_WIDTH = 720;
+const DETAIL_PANEL_MIN_LIST_WIDTH = 560;
+const DETAIL_PANEL_KEYBOARD_STEP = 24;
+const DETAIL_PANEL_STORAGE_KEY = "skill-workspace.detail-width";
+
 /** 技能详情接口的成功返回结构。 */
 type SkillDetailResponse = {
   skill: SkillDetail;
@@ -90,6 +97,22 @@ type SkillActionResult = {
   id: string;
   name: string;
 };
+
+/** 根据视口宽度计算详情栏当前允许的最大宽度。 */
+function getDetailPanelMaxWidth(viewportWidth: number) {
+  return Math.max(
+    DETAIL_PANEL_MIN_WIDTH,
+    Math.min(DETAIL_PANEL_MAX_WIDTH, viewportWidth - DETAIL_PANEL_MIN_LIST_WIDTH),
+  );
+}
+
+/** 将详情栏宽度约束在当前允许的最小值和最大值之间。 */
+function clampDetailPanelWidth(width: number, viewportWidth: number) {
+  return Math.min(
+    getDetailPanelMaxWidth(viewportWidth),
+    Math.max(DETAIL_PANEL_MIN_WIDTH, width),
+  );
+}
 
 /** 将技能更新时间格式化为工作区统一使用的文本。 */
 function formatDate(input: string) {
@@ -166,7 +189,32 @@ export function SkillWorkspace({
   const [saving, setSaving] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [detailPanelWidth, setDetailPanelWidth] = useState(DETAIL_PANEL_DEFAULT_WIDTH);
+  const [detailPanelMaxWidth, setDetailPanelMaxWidth] = useState(DETAIL_PANEL_MAX_WIDTH);
+  const [isResizingDetailPanel, setIsResizingDetailPanel] = useState(false);
+  const detailPanelWidthRef = useRef(DETAIL_PANEL_DEFAULT_WIDTH);
+  const resizeStartXRef = useRef(0);
+  const resizeStartWidthRef = useRef(DETAIL_PANEL_DEFAULT_WIDTH);
   const selectedId = searchParams.get("skill") ?? initialSelectedId ?? "";
+
+  /** 将详情栏宽度同步到本地存储，便于下次继续使用。 */
+  const persistDetailPanelWidth = useCallback((width: number) => {
+    window.localStorage.setItem(DETAIL_PANEL_STORAGE_KEY, String(width));
+  }, []);
+
+  /** 按当前视口约束详情栏宽度，并按需决定是否持久化。 */
+  const applyDetailPanelWidth = useCallback(
+    (width: number, persist = false) => {
+      const nextWidth = clampDetailPanelWidth(width, window.innerWidth);
+      detailPanelWidthRef.current = nextWidth;
+      setDetailPanelWidth(nextWidth);
+
+      if (persist) {
+        persistDetailPanelWidth(nextWidth);
+      }
+    },
+    [persistDetailPanelWidth],
+  );
 
   /** 读取指定技能的详情数据。 */
   async function fetchSkillDetail(skillId: string) {
@@ -233,6 +281,83 @@ export function SkillWorkspace({
       cancelled = true;
     };
   }, [selectedId, toast]);
+
+  /** 初始化详情栏宽度，并在首屏时按当前视口修正保存值。 */
+  useEffect(() => {
+    const frameId = window.requestAnimationFrame(() => {
+      const savedWidth = window.localStorage.getItem(DETAIL_PANEL_STORAGE_KEY);
+      const parsedWidth = savedWidth ? Number(savedWidth) : Number.NaN;
+      const initialWidth = clampDetailPanelWidth(
+        Number.isFinite(parsedWidth) ? parsedWidth : DETAIL_PANEL_DEFAULT_WIDTH,
+        window.innerWidth,
+      );
+      const initialMaxWidth = getDetailPanelMaxWidth(window.innerWidth);
+
+      setDetailPanelMaxWidth(initialMaxWidth);
+      detailPanelWidthRef.current = initialWidth;
+      setDetailPanelWidth(initialWidth);
+
+      if (savedWidth && initialWidth !== parsedWidth) {
+        persistDetailPanelWidth(initialWidth);
+      }
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [persistDetailPanelWidth]);
+
+  /** 在窗口尺寸变化时重新约束详情栏宽度，避免把左侧列表压塌。 */
+  useEffect(() => {
+    function handleResize() {
+      const nextMaxWidth = getDetailPanelMaxWidth(window.innerWidth);
+      const nextWidth = clampDetailPanelWidth(detailPanelWidthRef.current, window.innerWidth);
+
+      setDetailPanelMaxWidth(nextMaxWidth);
+
+      if (nextWidth !== detailPanelWidthRef.current) {
+        detailPanelWidthRef.current = nextWidth;
+        setDetailPanelWidth(nextWidth);
+        persistDetailPanelWidth(nextWidth);
+      }
+    }
+
+    window.addEventListener("resize", handleResize);
+
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, [persistDetailPanelWidth]);
+
+  /** 在拖拽详情栏时接管指针移动与结束事件，并恢复页面状态。 */
+  useEffect(() => {
+    if (!isResizingDetailPanel) {
+      return;
+    }
+
+    function handlePointerMove(event: PointerEvent) {
+      const deltaX = event.clientX - resizeStartXRef.current;
+      const nextWidth = resizeStartWidthRef.current - deltaX;
+      applyDetailPanelWidth(nextWidth);
+    }
+
+    function handlePointerUp() {
+      setIsResizingDetailPanel(false);
+      persistDetailPanelWidth(detailPanelWidthRef.current);
+    }
+
+    window.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("pointerup", handlePointerUp);
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    return () => {
+      window.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("pointerup", handlePointerUp);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
+  }, [applyDetailPanelWidth, isResizingDetailPanel, persistDetailPanelWidth]);
 
   /** 根据搜索词和排序规则生成当前应显示的技能列表。 */
   const filteredSkills = useMemo(() => {
@@ -409,10 +534,53 @@ export function SkillWorkspace({
     await refreshSkills();
   }
 
+  /** 开始拖拽详情栏分隔手柄。 */
+  function handleDetailPanelResizeStart(event: React.PointerEvent<HTMLDivElement>) {
+    if (window.innerWidth < 1280) {
+      return;
+    }
+
+    event.preventDefault();
+    resizeStartXRef.current = event.clientX;
+    resizeStartWidthRef.current = detailPanelWidthRef.current;
+    setIsResizingDetailPanel(true);
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  /** 支持通过键盘微调详情栏宽度。 */
+  function handleDetailPanelSeparatorKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (window.innerWidth < 1280) {
+      return;
+    }
+
+    if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      applyDetailPanelWidth(detailPanelWidthRef.current + DETAIL_PANEL_KEYBOARD_STEP, true);
+      return;
+    }
+
+    if (event.key === "ArrowRight") {
+      event.preventDefault();
+      applyDetailPanelWidth(detailPanelWidthRef.current - DETAIL_PANEL_KEYBOARD_STEP, true);
+      return;
+    }
+
+    if (event.key === "Home") {
+      event.preventDefault();
+      applyDetailPanelWidth(DETAIL_PANEL_MIN_WIDTH, true);
+      return;
+    }
+
+    if (event.key === "End") {
+      event.preventDefault();
+      applyDetailPanelWidth(getDetailPanelMaxWidth(window.innerWidth), true);
+    }
+  }
+
   return (
     <TooltipProvider delayDuration={150}>
       <div className="flex h-[calc(100vh-115px)] min-h-[720px]">
-        <section className="flex min-w-0 flex-1 flex-col border-r border-slate-200/80">
+        <section className="flex min-w-0 flex-1 flex-col border-r border-slate-200/80 xl:border-r-0">
           <div className="border-b border-slate-200/80 bg-white px-5 py-4 lg:px-8">
             <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
               <div className="flex flex-1 flex-col gap-3 sm:flex-row sm:items-center">
@@ -637,7 +805,31 @@ export function SkillWorkspace({
           </ScrollArea>
         </section>
 
-        <aside className="hidden min-h-0 w-[420px] shrink-0 bg-white xl:flex xl:flex-col">
+        <div
+          role="separator"
+          aria-label="调整详情栏宽度"
+          aria-orientation="vertical"
+          aria-valuemin={DETAIL_PANEL_MIN_WIDTH}
+          aria-valuemax={detailPanelMaxWidth}
+          aria-valuenow={detailPanelWidth}
+          tabIndex={0}
+          onPointerDown={handleDetailPanelResizeStart}
+          onKeyDown={handleDetailPanelSeparatorKeyDown}
+          className={`group hidden w-2 shrink-0 touch-none cursor-col-resize items-stretch justify-center bg-white outline-none transition xl:flex ${
+            isResizingDetailPanel ? "bg-sky-50" : "hover:bg-slate-50 focus:bg-slate-50"
+          }`}
+        >
+          <div
+            className={`w-px flex-1 transition ${
+              isResizingDetailPanel ? "bg-sky-400" : "bg-slate-200 group-hover:bg-slate-300"
+            }`}
+          />
+        </div>
+
+        <aside
+          className="hidden min-h-0 shrink-0 bg-white xl:flex xl:flex-col"
+          style={{ width: `${detailPanelWidth}px` }}
+        >
           {!selectedId ? (
             <div className="flex h-full items-center justify-center px-10 text-center">
               <div className="ui-chrome">
