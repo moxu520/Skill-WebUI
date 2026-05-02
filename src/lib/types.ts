@@ -114,3 +114,67 @@ export type TranslationMeta = {
   saveMode: TranslationSaveMode;
   createdFork: boolean;
 };
+
+/** 技能市场当前支持的外部来源标识。 */
+export type MarketSourceId = "skills_sh";
+
+/** 技能市场内置的榜单类型。 */
+export type MarketRanking = "trending" | "hot" | "all_time" | "newest";
+
+/** 市场条目安全审计状态的统一枚举。 */
+export type MarketAuditStatus = "pass" | "warn" | "fail" | "unknown";
+
+/** 单个市场技能的安全审计摘要。 */
+export type MarketAuditSummary = {
+  name: string;
+  status: MarketAuditStatus;
+  href: string;
+};
+
+/** 技能市场列表项的摘要信息。 */
+export type MarketSkillSummary = {
+  source: MarketSourceId;
+  ranking: MarketRanking;
+  rank: number;
+  name: string;
+  slug: string;
+  owner: string;
+  repository: string;
+  repositoryLabel: string;
+  repositoryUrl: string;
+  detailUrl: string;
+  installCommand: string;
+  description: string;
+  tags: string[];
+  weeklyInstalls: number | null;
+  weeklyInstallsLabel: string;
+  stars: number | null;
+  starsLabel: string;
+  firstSeenAt: string;
+  firstSeenLabel: string;
+  auditsCount: number;
+  updatedAt: string;
+  canImport: boolean;
+  importReason: string;
+};
+
+/** 技能市场详情面板使用的完整技能信息。 */
+export type MarketSkillDetail = MarketSkillSummary & {
+  summaryText: string;
+  skillBodyText: string;
+  audits: MarketAuditSummary[];
+  externalLinks: string[];
+};
+
+/** 单个榜单查询返回的市场结果集合。 */
+export type MarketSkillCollection = {
+  source: MarketSourceId;
+  ranking: MarketRanking;
+  fetchedAt: string;
+  items: MarketSkillSummary[];
+  total: number;
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+  error?: string;
+};
