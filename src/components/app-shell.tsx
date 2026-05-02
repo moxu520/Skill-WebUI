@@ -11,10 +11,10 @@ import { cn } from "@/lib/utils";
 
 const primaryNavigation = [
   { href: "/skills", label: "技能", icon: Blocks },
+  { href: "/translate", label: "翻译技能", icon: Languages },
 ];
 
 const upcomingNavigation = [
-  { label: "翻译技能", icon: Languages },
   { label: "技能市场", icon: Store },
   { label: "Git 同步", icon: GitBranch },
   { label: "风险检测", icon: AlertTriangle },
@@ -89,7 +89,7 @@ export function AppShell({
                 <Icon className="h-4 w-4" />
                 <span>{item.label}</span>
                 <span className="ml-auto rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide">
-                  待开发
+                  待对接
                 </span>
               </div>
             );

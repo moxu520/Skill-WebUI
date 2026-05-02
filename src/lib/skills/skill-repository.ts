@@ -31,6 +31,7 @@ import type {
   ImportSkillInput,
   SkillDetail,
   SkillSummary,
+  TranslationMeta,
 } from "@/lib/types";
 
 /**
@@ -48,6 +49,19 @@ function slugify(input: string) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 60);
+}
+
+/** 为派生技能分配一个可用的目录标识，必要时自动追加递增后缀。 */
+async function allocateDerivedSkillId(baseId: string) {
+  let attempt = sanitizeSkillId(baseId);
+  let suffix = 2;
+
+  while (await directoryExists(attempt)) {
+    attempt = sanitizeSkillId(`${baseId}-${suffix}`);
+    suffix += 1;
+  }
+
+  return attempt;
 }
 
 /** 列出受管技能根目录下的所有子目录名称。 */
@@ -291,5 +305,59 @@ export async function importGitSkill(sessionId: string, relativeSkillPath: strin
     await rm(targetDir, { recursive: true, force: true });
 
     throw error instanceof Error ? error : new Error("导入技能失败。");
+  }
+}
+
+/** 翻译结果保存时需要的输入结构。 */
+export type SaveTranslatedSkillInput = {
+  sourceId: string;
+  name: string;
+  description: string;
+  bodyMarkdown: string;
+  saveMode: "overwrite" | "fork";
+  slugSuffix: string;
+  titleSuffix: string;
+  meta: TranslationMeta;
+};
+
+/** 保存翻译后的技能内容，支持覆盖原技能或生成同目录副本。 */
+export async function saveTranslatedSkill(input: SaveTranslatedSkillInput) {
+  const sourceId = sanitizeSkillId(input.sourceId);
+
+  if (input.saveMode === "overwrite") {
+    const skill = await updateSkill(sourceId, {
+      name: input.name,
+      description: input.description,
+      bodyMarkdown: input.bodyMarkdown,
+      slug: sourceId,
+    });
+
+    return { skill, translationMeta: input.meta };
+  }
+
+  const sourceDirectory = resolveSkillDir(sourceId);
+  const targetId = await allocateDerivedSkillId(`${sourceId}-${input.slugSuffix}`);
+  const targetDirectory = resolveSkillDir(targetId);
+
+  try {
+    await copyDirectory(sourceDirectory, targetDirectory);
+
+    const markdown = buildSkillMarkdown({
+      title: input.name.trim()
+        ? `${input.name.trim()}${input.titleSuffix}`.trim()
+        : `${sourceId}${input.titleSuffix}`.trim(),
+      description: input.description,
+      bodyMarkdown: input.bodyMarkdown,
+    });
+
+    await writeFile(path.join(targetDirectory, SKILL_FILE), markdown, "utf8");
+
+    return {
+      skill: await getSkill(targetId),
+      translationMeta: input.meta,
+    };
+  } catch (error) {
+    await rm(targetDirectory, { recursive: true, force: true });
+    throw error instanceof Error ? error : new Error("保存翻译结果失败。");
   }
 }

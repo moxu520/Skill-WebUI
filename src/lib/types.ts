@@ -65,3 +65,52 @@ export type DiscoveredSkillSummary = {
 export type ScanRootConfig = {
   extraRoots: string[];
 };
+
+/** 翻译服务提供方的稳定标识。 */
+export type TranslationProviderId =
+  | "google"
+  | "local_builtin"
+  | "microsoft"
+  | "remote_llm"
+  | "local_llm";
+
+/** 翻译方向，仅支持中英互译。 */
+export type TranslationDirection = "zh-to-en" | "en-to-zh";
+
+/** 翻译结果的保存策略。 */
+export type TranslationSaveMode = "overwrite" | "fork";
+
+/** 翻译提供方的接入状态。 */
+export type TranslationProviderStatus = "available" | "planned";
+
+/** 翻译页面和设置页通用的提供方目录项。 */
+export type TranslationProviderCatalogItem = {
+  id: TranslationProviderId;
+  label: string;
+  description: string;
+  status: TranslationProviderStatus;
+  kindLabel: string;
+};
+
+/** 发起单个技能翻译时提交的请求结构。 */
+export type TranslateSkillInput = {
+  provider: TranslationProviderId;
+  direction: TranslationDirection;
+};
+
+/** 保存单个技能翻译结果时提交的请求结构。 */
+export type SaveTranslatedSkillRequest = TranslateSkillInput & {
+  saveMode: TranslationSaveMode;
+  name: string;
+  description: string;
+  bodyMarkdown: string;
+};
+
+/** 翻译后返回给前端的元信息。 */
+export type TranslationMeta = {
+  provider: TranslationProviderId;
+  sourceLanguage: string;
+  targetLanguage: string;
+  saveMode: TranslationSaveMode;
+  createdFork: boolean;
+};
