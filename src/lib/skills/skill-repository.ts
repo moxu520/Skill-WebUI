@@ -15,6 +15,12 @@ import {
 } from "@/lib/skills/skill-parser";
 import { ensureSkillsRoot, skillsRoot } from "@/lib/skills/config";
 import {
+  discoverGitSkillsFromRepository,
+  findSkillFileName,
+  normalizeImportedSkillFile,
+  resolveGitSkillDirectory,
+} from "@/lib/skills/git-import";
+import {
   assertInsideSkillsRoot,
   resolveSkillDir,
   sanitizeSkillId,
@@ -25,10 +31,17 @@ import type {
   ImportSkillInput,
   SkillDetail,
   SkillSummary,
+  TranslationMeta,
 } from "@/lib/types";
+
+/**
+ * 负责受管技能目录的读写、增删改查与导入流程。
+ * 该模块是本地 Skill 数据访问的统一入口。
+ */
 
 const SKILL_FILE = "SKILL.md";
 
+/** 将技能名称转换为稳定的目录标识。 */
 function slugify(input: string) {
   return input
     .toLowerCase()
@@ -38,15 +51,31 @@ function slugify(input: string) {
     .slice(0, 60);
 }
 
+/** 为派生技能分配一个可用的目录标识，必要时自动追加递增后缀。 */
+async function allocateDerivedSkillId(baseId: string) {
+  let attempt = sanitizeSkillId(baseId);
+  let suffix = 2;
+
+  while (await directoryExists(attempt)) {
+    attempt = sanitizeSkillId(`${baseId}-${suffix}`);
+    suffix += 1;
+  }
+
+  return attempt;
+}
+
+/** 列出受管技能根目录下的所有子目录名称。 */
 async function readDirectoryNames() {
   await ensureSkillsRoot();
   const entries = await readdir(skillsRoot, { withFileTypes: true });
   return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
 }
 
+/** 读取单个技能目录中的 Markdown、资源列表和更新时间。 */
 async function readSkillMarkdown(id: string) {
   const directory = resolveSkillDir(id);
-  const filePath = path.join(directory, SKILL_FILE);
+  const fileName = await findSkillFileName(directory);
+  const filePath = path.join(directory, fileName);
   const raw = await readFile(filePath, "utf8");
   const parsed = parseSkillMarkdown(raw, id);
   const directoryEntries = await readdir(directory, { withFileTypes: true });
@@ -58,12 +87,13 @@ async function readSkillMarkdown(id: string) {
     raw,
     parsed,
     assets: directoryEntries
-      .filter((entry) => entry.name !== SKILL_FILE)
+      .filter((entry) => entry.name !== SKILL_FILE && entry.name !== "skill.md")
       .map((entry) => entry.name),
     updatedAt: skillStat.mtime.toISOString(),
   };
 }
 
+/** 判断指定技能目录是否已存在。 */
 async function directoryExists(id: string) {
   try {
     await stat(resolveSkillDir(id));
@@ -73,12 +103,14 @@ async function directoryExists(id: string) {
   }
 }
 
+/** 保证技能名称非空，避免生成无效的技能文件。 */
 function assertNonEmptyName(name: string) {
   if (!name.trim()) {
     throw new Error("技能名称不能为空。");
   }
 }
 
+/** 递归复制整个技能目录，用于导入外部技能。 */
 async function copyDirectory(source: string, target: string) {
   await mkdir(target, { recursive: true });
   const entries = await readdir(source, { withFileTypes: true });
@@ -98,6 +130,12 @@ async function copyDirectory(source: string, target: string) {
   }
 }
 
+/** 校验目录中是否存在技能主文件，不存在时抛出明确错误。 */
+async function assertSkillFileExists(directory: string) {
+  await findSkillFileName(directory);
+}
+
+/** 将技能目录转换成列表页需要的轻量摘要。 */
 async function toSummary(id: string): Promise<SkillSummary | null> {
   try {
     const { parsed, updatedAt } = await readSkillMarkdown(id);
@@ -114,6 +152,7 @@ async function toSummary(id: string): Promise<SkillSummary | null> {
   }
 }
 
+/** 列出受管目录中的全部技能摘要，按最近更新时间倒序排序。 */
 export async function listSkills() {
   const directories = await readDirectoryNames();
   const skills = await Promise.all(directories.map((directory) => toSummary(directory)));
@@ -123,9 +162,10 @@ export async function listSkills() {
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
+/** 读取单个技能的完整详情，包括 Markdown 原文与资源列表。 */
 export async function getSkill(id: string): Promise<SkillDetail> {
   const safeId = sanitizeSkillId(id);
-  const { parsed, raw, assets, updatedAt } = await readSkillMarkdown(safeId);
+  const { parsed, assets, updatedAt } = await readSkillMarkdown(safeId);
 
   return {
     id: safeId,
@@ -133,12 +173,17 @@ export async function getSkill(id: string): Promise<SkillDetail> {
     description: parsed.description,
     path: path.relative(process.cwd(), resolveSkillDir(safeId)),
     updatedAt,
-    contentMarkdown: raw,
+    contentMarkdown: buildSkillMarkdown({
+      title: parsed.title,
+      description: parsed.description,
+      bodyMarkdown: parsed.bodyMarkdown,
+    }),
     bodyMarkdown: parsed.bodyMarkdown,
     assets,
   };
 }
 
+/** 创建一个新的技能目录，并生成初始 `SKILL.md`。 */
 export async function createSkill(input: CreateSkillInput) {
   assertNonEmptyName(input.name);
   await ensureSkillsRoot();
@@ -162,6 +207,7 @@ export async function createSkill(input: CreateSkillInput) {
   return getSkill(slug);
 }
 
+/** 更新技能内容；当目录标识变化时会同步重命名目录。 */
 export async function updateSkill(id: string, input: CreateSkillInput) {
   const safeId = sanitizeSkillId(id);
   assertNonEmptyName(input.name);
@@ -191,12 +237,18 @@ export async function updateSkill(id: string, input: CreateSkillInput) {
   return getSkill(targetId);
 }
 
+/** 删除整个技能目录。 */
 export async function deleteSkill(id: string) {
   const safeId = sanitizeSkillId(id);
   await rm(resolveSkillDir(safeId), { recursive: true, force: false });
 }
 
+/** 从外部本地目录导入技能，并复制到受管目录中。 */
 export async function importSkill(input: ImportSkillInput) {
+  if (input.sourceType === "git") {
+    return importGitSkill(input.sessionId, input.relativeSkillPath);
+  }
+
   const source = validateImportSource(input.sourcePath);
   const sourceStat = await stat(source);
 
@@ -204,13 +256,7 @@ export async function importSkill(input: ImportSkillInput) {
     throw new Error("导入路径必须指向一个目录。");
   }
 
-  const skillFile = path.join(source, SKILL_FILE);
-
-  try {
-    await stat(skillFile);
-  } catch {
-    throw new Error("所选目录中不包含 SKILL.md。");
-  }
+  await assertSkillFileExists(source);
 
   const targetId = sanitizeSkillId(path.basename(source));
 
@@ -219,6 +265,99 @@ export async function importSkill(input: ImportSkillInput) {
   }
 
   const targetDir = resolveSkillDir(targetId);
-  await copyDirectory(source, targetDir);
-  return getSkill(targetId);
+
+  try {
+    await copyDirectory(source, targetDir);
+    await normalizeImportedSkillFile(targetDir);
+    await assertSkillFileExists(targetDir);
+    return await getSkill(targetId);
+  } catch (error) {
+    await rm(targetDir, { recursive: true, force: true });
+
+    throw error instanceof Error ? error : new Error("导入技能失败。");
+  }
+}
+
+/** 扫描 Git 仓库中的可导入技能目录，并返回候选列表。 */
+export async function discoverGitSkills(repositoryUrl: string) {
+  return discoverGitSkillsFromRepository(repositoryUrl);
+}
+
+/** 从 Git 扫描会话中导入指定技能目录。 */
+export async function importGitSkill(sessionId: string, relativeSkillPath: string) {
+  const source = await resolveGitSkillDirectory(sessionId, relativeSkillPath);
+  await assertSkillFileExists(source);
+
+  const targetId = sanitizeSkillId(path.basename(source));
+
+  if (await directoryExists(targetId)) {
+    throw new Error("同名目录的技能已存在。");
+  }
+
+  const targetDir = resolveSkillDir(targetId);
+
+  try {
+    await copyDirectory(source, targetDir);
+    await normalizeImportedSkillFile(targetDir);
+    await assertSkillFileExists(targetDir);
+    return await getSkill(targetId);
+  } catch (error) {
+    await rm(targetDir, { recursive: true, force: true });
+
+    throw error instanceof Error ? error : new Error("导入技能失败。");
+  }
+}
+
+/** 翻译结果保存时需要的输入结构。 */
+export type SaveTranslatedSkillInput = {
+  sourceId: string;
+  name: string;
+  description: string;
+  bodyMarkdown: string;
+  saveMode: "overwrite" | "fork";
+  slugSuffix: string;
+  titleSuffix: string;
+  meta: TranslationMeta;
+};
+
+/** 保存翻译后的技能内容，支持覆盖原技能或生成同目录副本。 */
+export async function saveTranslatedSkill(input: SaveTranslatedSkillInput) {
+  const sourceId = sanitizeSkillId(input.sourceId);
+
+  if (input.saveMode === "overwrite") {
+    const skill = await updateSkill(sourceId, {
+      name: input.name,
+      description: input.description,
+      bodyMarkdown: input.bodyMarkdown,
+      slug: sourceId,
+    });
+
+    return { skill, translationMeta: input.meta };
+  }
+
+  const sourceDirectory = resolveSkillDir(sourceId);
+  const targetId = await allocateDerivedSkillId(`${sourceId}-${input.slugSuffix}`);
+  const targetDirectory = resolveSkillDir(targetId);
+
+  try {
+    await copyDirectory(sourceDirectory, targetDirectory);
+
+    const markdown = buildSkillMarkdown({
+      title: input.name.trim()
+        ? `${input.name.trim()}${input.titleSuffix}`.trim()
+        : `${sourceId}${input.titleSuffix}`.trim(),
+      description: input.description,
+      bodyMarkdown: input.bodyMarkdown,
+    });
+
+    await writeFile(path.join(targetDirectory, SKILL_FILE), markdown, "utf8");
+
+    return {
+      skill: await getSkill(targetId),
+      translationMeta: input.meta,
+    };
+  } catch (error) {
+    await rm(targetDirectory, { recursive: true, force: true });
+    throw error instanceof Error ? error : new Error("保存翻译结果失败。");
+  }
 }

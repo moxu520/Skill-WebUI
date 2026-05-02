@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createSkill, listSkills } from "@/lib/skills/skill-repository";
 
+/** 返回受管技能目录中的技能摘要列表。 */
 export async function GET() {
   try {
     const skills = await listSkills();
@@ -13,6 +14,7 @@ export async function GET() {
   }
 }
 
+/** 创建一个新的受管技能目录。 */
 export async function POST(request: Request) {
   try {
     const body = await request.json();

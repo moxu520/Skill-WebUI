@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { importSkill } from "@/lib/skills/skill-repository";
 
+/** 从本地目录或 Git 扫描会话导入技能。 */
 export async function POST(request: Request) {
   try {
     const body = await request.json();

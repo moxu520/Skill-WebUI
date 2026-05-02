@@ -5,7 +5,6 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowUpDown,
   Eye,
-  FileText,
   Grid2x2,
   List,
   LoaderCircle,
@@ -51,8 +50,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/components/ui/toast";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Tooltip,
@@ -60,10 +59,15 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import type { SkillDetail, SkillSummary } from "@/lib/types";
+import type { DiscoveredSkillSummary, SkillDetail, SkillSummary } from "@/lib/types";
 
+/**
+ * 技能工作区组件，负责管理左侧技能列表、自动发现候选、右侧详情面板
+ * 以及导入/新建弹窗之间的交互状态。
+ */
 type SkillWorkspaceProps = {
   initialSkills: SkillSummary[];
+  initialDiscoveredSkills: DiscoveredSkillSummary[];
   initialSelectedId?: string;
   skillsRoot: string;
 };
@@ -71,6 +75,23 @@ type SkillWorkspaceProps = {
 type SortMode = "updated" | "name";
 type ViewMode = "grid" | "list";
 
+/** 技能详情接口的成功返回结构。 */
+type SkillDetailResponse = {
+  skill: SkillDetail;
+};
+
+/** 技能列表接口的成功返回结构。 */
+type SkillsResponse = {
+  skills: SkillSummary[];
+};
+
+/** 子表单成功完成后回传给工作区的技能信息。 */
+type SkillActionResult = {
+  id: string;
+  name: string;
+};
+
+/** 将技能更新时间格式化为工作区统一使用的文本。 */
 function formatDate(input: string) {
   const date = new Date(input);
 
@@ -99,6 +120,7 @@ function formatDate(input: string) {
   return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
 }
 
+/** 带提示文本的图标按钮，避免纯图标操作缺少语义。 */
 function IconButton({
   label,
   children,
@@ -116,12 +138,15 @@ function IconButton({
   );
 }
 
+/** 技能主工作区，串联列表、筛选、候选导入和详情编辑流程。 */
 export function SkillWorkspace({
   initialSkills,
+  initialDiscoveredSkills,
   initialSelectedId,
   skillsRoot,
 }: SkillWorkspaceProps) {
   const router = useRouter();
+  const { toast } = useToast();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [skills, setSkills] = useState(initialSkills);
@@ -139,12 +164,21 @@ export function SkillWorkspace({
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const selectedId = searchParams.get("skill") ?? initialSelectedId ?? "";
 
+  /** 读取指定技能的详情数据。 */
+  async function fetchSkillDetail(skillId: string) {
+    const response = await fetch(`/api/skills/${encodeURIComponent(skillId)}`);
+    const payload = (await response.json()) as Partial<SkillDetailResponse> & {
+      error?: string;
+    };
+
+    return { response, payload };
+  }
+
+  /** 当路由中的技能标识变化时，加载右侧详情面板数据。 */
   useEffect(() => {
     if (!selectedId) {
       return;
@@ -154,10 +188,8 @@ export function SkillWorkspace({
 
     async function loadDetail() {
       setLoadingDetail(true);
-      setError("");
 
-      const response = await fetch(`/api/skills/${encodeURIComponent(selectedId)}`);
-      const payload = await response.json();
+      const { response, payload } = await fetchSkillDetail(selectedId);
 
       if (cancelled) {
         return;
@@ -165,7 +197,22 @@ export function SkillWorkspace({
 
       if (!response.ok) {
         setSelectedSkill(null);
-        setError(payload.error ?? "加载技能详情失败。");
+        toast({
+          title: "加载技能详情失败",
+          description: payload.error ?? "加载技能详情失败。",
+          variant: "error",
+        });
+        setLoadingDetail(false);
+        return;
+      }
+
+      if (!payload.skill) {
+        setSelectedSkill(null);
+        toast({
+          title: "加载技能详情失败",
+          description: "技能详情返回无效。",
+          variant: "error",
+        });
         setLoadingDetail(false);
         return;
       }
@@ -185,8 +232,9 @@ export function SkillWorkspace({
     return () => {
       cancelled = true;
     };
-  }, [selectedId]);
+  }, [selectedId, toast]);
 
+  /** 根据搜索词和排序规则生成当前应显示的技能列表。 */
   const filteredSkills = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
     const next = skills.filter((skill) => {
@@ -211,6 +259,7 @@ export function SkillWorkspace({
     return next;
   }, [search, skills, sort]);
 
+  /** 将当前选中的技能标识同步到地址栏查询参数。 */
   function updateQuery(nextId: string) {
     const params = new URLSearchParams(searchParams.toString());
 
@@ -224,31 +273,79 @@ export function SkillWorkspace({
     router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname);
   }
 
+  /** 主动刷新受管技能列表。 */
   async function refreshSkills() {
     setRefreshing(true);
-    setError("");
 
     const response = await fetch("/api/skills");
-    const payload = await response.json();
+    const payload = (await response.json()) as Partial<SkillsResponse> & {
+      error?: string;
+    };
 
     if (!response.ok) {
-      setError(payload.error ?? "刷新技能列表失败。");
+      toast({
+        title: "刷新技能列表失败",
+        description: payload.error ?? "刷新技能列表失败。",
+        variant: "error",
+      });
       setRefreshing(false);
       return;
     }
 
-    setSkills(payload.skills);
+    const nextSkills = payload.skills ?? [];
+    setSkills(nextSkills);
+
+    if (!selectedId) {
+      setRefreshing(false);
+      return;
+    }
+
+    const stillExists = nextSkills.some((skill) => skill.id === selectedId);
+
+    if (!stillExists) {
+      setSelectedSkill(null);
+      setDetailMode("preview");
+      updateQuery("");
+      setRefreshing(false);
+      return;
+    }
+
+    setLoadingDetail(true);
+    const detailResult = await fetchSkillDetail(selectedId);
+
+    if (!detailResult.response.ok) {
+      toast({
+        title: "刷新技能详情失败",
+        description: detailResult.payload.error ?? "刷新技能详情失败。",
+        variant: "error",
+      });
+      setLoadingDetail(false);
+      setRefreshing(false);
+      return;
+    }
+
+    if (detailResult.payload.skill) {
+      setSelectedSkill(detailResult.payload.skill);
+      setDraft({
+        name: detailResult.payload.skill.name,
+        description: detailResult.payload.skill.description,
+        bodyMarkdown: detailResult.payload.skill.bodyMarkdown,
+        slug: detailResult.payload.skill.id,
+      });
+      setDetailMode("preview");
+    }
+
+    setLoadingDetail(false);
     setRefreshing(false);
   }
 
+  /** 保存右侧编辑态中的技能修改，并保持列表同步。 */
   async function saveSkill() {
     if (!selectedId) {
       return;
     }
 
     setSaving(true);
-    setError("");
-    setMessage("");
 
     const response = await fetch(`/api/skills/${encodeURIComponent(selectedId)}`, {
       method: "PUT",
@@ -258,7 +355,11 @@ export function SkillWorkspace({
     const payload = await response.json();
 
     if (!response.ok) {
-      setError(payload.error ?? "更新技能失败。");
+      toast({
+        title: "保存技能失败",
+        description: payload.error ?? "更新技能失败。",
+        variant: "error",
+      });
       setSaving(false);
       return;
     }
@@ -266,7 +367,11 @@ export function SkillWorkspace({
     setSelectedSkill(payload.skill);
     setDetailMode("preview");
     setSaving(false);
-    setMessage("技能已保存。");
+    toast({
+      title: "技能已保存",
+      description: `已保存 ${payload.skill.name}。`,
+      variant: "success",
+    });
     await refreshSkills();
 
     if (payload.skill.id !== selectedId) {
@@ -274,6 +379,7 @@ export function SkillWorkspace({
     }
   }
 
+  /** 删除当前选中的技能目录，并关闭对应详情。 */
   async function deleteSelectedSkill() {
     if (!selectedId) {
       return;
@@ -285,12 +391,20 @@ export function SkillWorkspace({
     const payload = await response.json();
 
     if (!response.ok) {
-      setError(payload.error ?? "删除技能失败。");
+      toast({
+        title: "删除技能失败",
+        description: payload.error ?? "删除技能失败。",
+        variant: "error",
+      });
       return;
     }
 
     setSelectedSkill(null);
-    setMessage("技能已删除。");
+    toast({
+      title: "技能已删除",
+      description: `已删除 ${selectedId}。`,
+      variant: "success",
+    });
     updateQuery("");
     await refreshSkills();
   }
@@ -354,14 +468,42 @@ export function SkillWorkspace({
                       导入
                     </Button>
                   </DialogTrigger>
-                  <DialogContent>
+                  <DialogContent className="h-[min(820px,calc(100vh-32px))]">
                     <DialogHeader>
                       <DialogTitle>导入技能</DialogTitle>
                       <DialogDescription>
-                        从本地目录导入一个已有技能，目录中需要包含 `SKILL.md`。
+                        从本地目录或 Git 仓库导入一个已有技能。
                       </DialogDescription>
                     </DialogHeader>
-                    <SkillImportForm compact onSuccess={() => setImportOpen(false)} />
+                    <SkillImportForm
+                      compact
+                      initialDiscoveredSkills={initialDiscoveredSkills}
+                      onBatchSuccess={(skills) => {
+                        const lastSkill = skills.at(-1);
+
+                        setImportOpen(false);
+                        toast({
+                          title: "技能已同步",
+                          description: `已同步 ${skills.length} 个技能。`,
+                          variant: "success",
+                        });
+                        void refreshSkills();
+
+                        if (lastSkill) {
+                          updateQuery(lastSkill.id);
+                        }
+                      }}
+                      onSuccess={(skill) => {
+                        setImportOpen(false);
+                        toast({
+                          title: "技能已导入",
+                          description: `已导入 ${skill.name}。`,
+                          variant: "success",
+                        });
+                        void refreshSkills();
+                        updateQuery(skill.id);
+                      }}
+                    />
                   </DialogContent>
                 </Dialog>
                 <Dialog open={createOpen} onOpenChange={setCreateOpen}>
@@ -378,7 +520,19 @@ export function SkillWorkspace({
                         创建一个新的本地技能，并立即写入 `SKILL.md`。
                       </DialogDescription>
                     </DialogHeader>
-                    <SkillCreateForm compact onSuccess={() => setCreateOpen(false)} />
+                    <SkillCreateForm
+                      compact
+                      onSuccess={(skill: SkillActionResult) => {
+                        setCreateOpen(false);
+                        toast({
+                          title: "技能已创建",
+                          description: `已创建 ${skill.name}。`,
+                          variant: "success",
+                        });
+                        void refreshSkills();
+                        updateQuery(skill.id);
+                      }}
+                    />
                   </DialogContent>
                 </Dialog>
               </div>
@@ -386,25 +540,9 @@ export function SkillWorkspace({
 
             <div className="mt-3 flex items-center gap-3 text-sm text-slate-500">
               <Badge variant="muted">共 {filteredSkills.length} 个技能</Badge>
-              <span className="truncate">{skillsRoot}</span>
+              <span className="copy-content truncate">{skillsRoot}</span>
             </div>
           </div>
-
-          {error ? (
-            <div className="px-5 pt-4 lg:px-8">
-              <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                {error}
-              </div>
-            </div>
-          ) : null}
-
-          {message ? (
-            <div className="px-5 pt-4 lg:px-8">
-              <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-                {message}
-              </div>
-            </div>
-          ) : null}
 
           <ScrollArea className="flex-1">
             <div
@@ -430,9 +568,8 @@ export function SkillWorkspace({
                       <div className="flex items-start justify-between gap-3">
                         <button
                           type="button"
-                          className="min-w-0 text-left"
+                          className="min-w-0 cursor-pointer select-none text-left"
                           onClick={() => {
-                            setMessage("");
                             setDetailMode("preview");
                             updateQuery(skill.id);
                           }}
@@ -444,7 +581,11 @@ export function SkillWorkspace({
                         </button>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="-m-1.5 h-10 w-10 rounded-md p-2.5"
+                            >
                               <MoreHorizontal className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
@@ -472,10 +613,10 @@ export function SkillWorkspace({
                       </div>
                     </CardHeader>
                     <CardContent className="space-y-3">
-                      <div className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                      <div className="copy-content rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-500">
                         {skill.path}
                       </div>
-                      <div className="flex items-center justify-between text-xs text-slate-400">
+                      <div className="ui-chrome flex items-center justify-between text-xs text-slate-400">
                         <span>更新于</span>
                         <span>{formatDate(skill.updatedAt)}</span>
                       </div>
@@ -485,7 +626,7 @@ export function SkillWorkspace({
               })}
 
               {!filteredSkills.length ? (
-                <div className="col-span-full rounded-lg border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
+                <div className="ui-chrome col-span-full rounded-lg border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
                   <p className="text-base font-medium text-slate-900">没有找到技能</p>
                   <p className="mt-1 text-sm text-slate-500">
                     你可以先创建一个新技能，或者导入已有的本地目录。
@@ -496,10 +637,10 @@ export function SkillWorkspace({
           </ScrollArea>
         </section>
 
-        <aside className="hidden w-[420px] shrink-0 bg-white xl:flex xl:flex-col">
+        <aside className="hidden min-h-0 w-[420px] shrink-0 bg-white xl:flex xl:flex-col">
           {!selectedId ? (
             <div className="flex h-full items-center justify-center px-10 text-center">
-              <div>
+              <div className="ui-chrome">
                 <p className="text-base font-medium text-slate-900">请选择一个技能</p>
                 <p className="mt-1 text-sm text-slate-500">
                   选择左侧卡片后，可以在这里预览、编辑或删除该技能。
@@ -511,10 +652,10 @@ export function SkillWorkspace({
               <LoaderCircle className="h-5 w-5 animate-spin text-slate-400" />
             </div>
           ) : (
-            <div className="flex h-full flex-col">
+            <div className="flex h-full min-h-0 flex-col">
               <div className="border-b border-slate-200/80 px-5 py-4">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
+                  <div className="ui-chrome min-w-0">
                     <h2 className="truncate text-lg font-semibold">{selectedSkill.name}</h2>
                     <p className="mt-1 line-clamp-2 text-sm text-slate-500">
                       {selectedSkill.description || "暂无描述"}
@@ -569,30 +710,21 @@ export function SkillWorkspace({
                     <Badge variant="muted">{selectedSkill.assets.length} 个资源</Badge>
                   ) : null}
                 </div>
-                <div className="mt-4 rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                <div className="copy-content mt-4 rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-500">
                   {selectedSkill.path}
                 </div>
               </div>
 
-              <ScrollArea className="flex-1">
-                <div className="p-5">
-                  <Tabs value={detailMode} onValueChange={(value) => setDetailMode(value as "preview" | "edit")}>
-                    <TabsList className="grid w-full grid-cols-2">
-                      <TabsTrigger value="preview">
-                        <Eye className="mr-2 h-4 w-4" />
-                        预览
-                      </TabsTrigger>
-                      <TabsTrigger value="edit">
-                        <FileText className="mr-2 h-4 w-4" />
-                        编辑
-                      </TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="preview" className="pt-1">
+              <ScrollArea className="min-h-0 flex-1">
+                <div className="min-w-0 p-5">
+                  {detailMode === "preview" ? (
+                    <div className="min-h-0 overflow-hidden pt-1">
                       <MarkdownViewer content={selectedSkill.contentMarkdown} />
-                    </TabsContent>
-                    <TabsContent value="edit" className="space-y-4 pt-1">
+                    </div>
+                  ) : (
+                    <div className="min-h-0 space-y-4 pt-1">
                       <div className="space-y-1">
-                        <label className="text-sm font-medium text-slate-700">名称</label>
+                        <label className="ui-chrome text-sm font-medium text-slate-700">名称</label>
                         <Input
                           value={draft.name}
                           onChange={(event) =>
@@ -601,7 +733,7 @@ export function SkillWorkspace({
                         />
                       </div>
                       <div className="space-y-1">
-                        <label className="text-sm font-medium text-slate-700">目录标识</label>
+                        <label className="ui-chrome text-sm font-medium text-slate-700">目录标识</label>
                         <Input
                           value={draft.slug}
                           onChange={(event) =>
@@ -610,7 +742,7 @@ export function SkillWorkspace({
                         />
                       </div>
                       <div className="space-y-1">
-                        <label className="text-sm font-medium text-slate-700">描述</label>
+                        <label className="ui-chrome text-sm font-medium text-slate-700">描述</label>
                         <Textarea
                           rows={3}
                           value={draft.description}
@@ -623,7 +755,7 @@ export function SkillWorkspace({
                         />
                       </div>
                       <div className="space-y-1">
-                        <label className="text-sm font-medium text-slate-700">Markdown 正文</label>
+                        <label className="ui-chrome text-sm font-medium text-slate-700">Markdown 正文</label>
                         <Textarea
                           rows={18}
                           value={draft.bodyMarkdown}
@@ -650,8 +782,8 @@ export function SkillWorkspace({
                           保存修改
                         </Button>
                       </div>
-                    </TabsContent>
-                  </Tabs>
+                    </div>
+                  )}
                 </div>
               </ScrollArea>
             </div>
