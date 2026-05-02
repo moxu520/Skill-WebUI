@@ -1,36 +1,172 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Skill-WebUI
+
+[中文文档](./README.zh-CN.md)
+
+Skill-WebUI is a local-first web workspace for managing Markdown-based skills. It provides a focused UI for browsing, creating, editing, importing, discovering, and translating skills stored on disk, while keeping the file layout simple enough to stay compatible with normal repository workflows.
+
+This project is built with Next.js, React, TypeScript, and a small local data layer that reads and writes skill directories directly from the filesystem. The current implementation is aimed at individual builders and small teams who want a practical interface over a skill library without turning it into a hosted service.
+
+## Highlights
+
+- Local-first skill workspace backed by directories and `SKILL.md` files
+- Create, edit, rename, and delete managed skills from the UI
+- Import skills from local paths
+- Discover and import skills from Git repositories
+- Auto-scan common local roots plus configurable extra discovery roots
+- Translate managed skills between English and Chinese
+- Dedicated settings area for workspace, discovery, and provider-related configuration
+
+## Current Features
+
+### Skill Workspace
+
+- Browse managed skills in grid or list mode
+- Search and sort skills by name or update time
+- Preview Markdown content inside the app
+- Edit title, description, body content, and slug-backed directory name
+- Delete managed skill directories from the workspace
+
+### Import and Discovery
+
+- Import a skill directly from a local directory
+- Scan configured local roots for importable skills
+- Discover skills from a Git repository URL and import selected entries
+- Detect conflict or invalid candidates before import
+
+### Translation
+
+- Select an existing managed skill and generate a translated version
+- Support English-to-Chinese and Chinese-to-English workflows
+- Save translations by overwriting the current skill or creating a derived copy
+- Current executable providers:
+  - `Google`
+  - `local_builtin`
+
+### Settings
+
+- View the managed skills root
+- View the discovery config file location
+- Configure extra discovery roots
+- View current translation provider status
+- Reserve integration entry points for future model providers
+
+## Preview
+
+Screenshots and short workflow captures are planned but not included yet. The current UI already covers the main skill management, import, translation, and settings flows, so this section can be populated later with real project screenshots instead of mock assets.
+
+## Tech Stack
+
+- Next.js 16
+- React 19
+- TypeScript 5
+- Tailwind CSS 4
+- Radix UI
+- `google-translate-api-x`
 
 ## Getting Started
 
-First, run the development server:
+### Requirements
+
+- Node.js 20+ recommended
+- npm
+
+### Installation
+
+```bash
+git clone https://github.com/moxu520/Skill-WebUI.git
+cd Skill-WebUI
+npm install
+```
+
+### Run in Development
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Build and Lint
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run build
+npm run lint
+```
 
-## Learn More
+## Configuration
 
-To learn more about Next.js, take a look at the following resources:
+### `SKILLS_ROOT`
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+The managed skills root defaults to:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```text
+<project-root>/skills
+```
 
-## Deploy on Vercel
+You can override it with the `SKILLS_ROOT` environment variable.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Example:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+SKILLS_ROOT=/absolute/path/to/skills npm run dev
+```
+
+### Discovery Config
+
+Extra discovery roots are persisted in a local JSON config file managed by the app. The settings pages also expose:
+
+- the current managed skills root
+- the discovery config file path
+- editable extra scan roots for skill discovery
+
+## Typical Workflow
+
+1. Start the app with `npm run dev`.
+2. Open the Skills workspace.
+3. Create a new skill or import one from a local path or Git repository.
+4. Review and edit the generated `SKILL.md` content.
+5. Use the Translation workspace when you need a Chinese or English version.
+6. Adjust discovery roots in Settings if your skills live outside the default scan locations.
+
+## Project Structure
+
+```text
+src/app/                 App routes and API routes
+src/components/          Workspace, forms, settings, and UI building blocks
+src/lib/skills/          Filesystem-backed skill management, import, discovery, parsing
+src/lib/translation/     Translation catalog and translation service logic
+skills/                  Default managed skill root
+```
+
+## Limitations
+
+- This is currently a local workspace, not a hosted multi-user platform.
+- Translation provider support is intentionally narrow in the current implementation.
+- The model provider settings area is still a reserved integration surface.
+- Some navigation items already appear in the UI as planned capabilities rather than active features.
+
+## TODO
+
+- Add a skill marketplace workflow
+- Add Git sync for already managed skills
+- Add risk inspection / validation flows
+- Add external model provider integration
+- Add more translation providers, including Microsoft, remote LLM, and local LLM backends
+- Add screenshots and short demo captures to the documentation
+
+## Contributing
+
+Contributions are welcome.
+
+Suggested workflow:
+
+1. Fork the repository
+2. Create a focused branch
+3. Make the change with tests or validation where appropriate
+4. Open a pull request with a clear summary
+
+When reporting issues, include reproduction steps, expected behavior, actual behavior, and any relevant environment details.
+
+## License
+
+This README is written for MIT licensing. If the repository does not yet include a `LICENSE` file, add one before publishing or distributing the project as a formal open-source release.
