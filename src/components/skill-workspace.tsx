@@ -59,7 +59,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import type { DiscoveredSkillSummary, SkillDetail, SkillSummary } from "@/lib/types";
+import type { SkillDetail, SkillSummary, DiscoveredSkillSummary } from "@/lib/types";
 
 /**
  * 技能工作区组件，负责管理左侧技能列表、自动发现候选、右侧详情面板
@@ -67,7 +67,6 @@ import type { DiscoveredSkillSummary, SkillDetail, SkillSummary } from "@/lib/ty
  */
 type SkillWorkspaceProps = {
   initialSkills: SkillSummary[];
-  initialDiscoveredSkills: DiscoveredSkillSummary[];
   initialSelectedId?: string;
   skillsRoot: string;
 };
@@ -164,7 +163,6 @@ function IconButton({
 /** 技能主工作区，串联列表、筛选、候选导入和详情编辑流程。 */
 export function SkillWorkspace({
   initialSkills,
-  initialDiscoveredSkills,
   initialSelectedId,
   skillsRoot,
 }: SkillWorkspaceProps) {
@@ -189,6 +187,9 @@ export function SkillWorkspace({
   const [saving, setSaving] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [discoveredSkillsCache, setDiscoveredSkillsCache] = useState<
+    DiscoveredSkillSummary[]
+  >([]);
   const [detailPanelWidth, setDetailPanelWidth] = useState(DETAIL_PANEL_DEFAULT_WIDTH);
   const [detailPanelMaxWidth, setDetailPanelMaxWidth] = useState(DETAIL_PANEL_MAX_WIDTH);
   const [isResizingDetailPanel, setIsResizingDetailPanel] = useState(false);
@@ -645,7 +646,8 @@ export function SkillWorkspace({
                     </DialogHeader>
                     <SkillImportForm
                       compact
-                      initialDiscoveredSkills={initialDiscoveredSkills}
+                      initialDiscoveredSkills={discoveredSkillsCache}
+                      onDiscoveredSkillsChange={setDiscoveredSkillsCache}
                       onBatchSuccess={(skills) => {
                         const lastSkill = skills.at(-1);
 

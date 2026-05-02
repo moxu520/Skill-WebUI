@@ -1,6 +1,6 @@
 import { AppShell } from "@/components/app-shell";
 import { MarketWorkspace } from "@/components/market-workspace";
-import { listMarketplaceSkills } from "@/lib/skills/marketplace";
+import { readCachedMarketplaceSkills } from "@/lib/skills/marketplace";
 import type { MarketRanking } from "@/lib/types";
 
 /** 校验页面查询参数中的榜单类型，非法值回退到默认榜单。 */
@@ -12,7 +12,7 @@ function parseRanking(input: string | string[] | undefined): MarketRanking {
   return "trending";
 }
 
-/** 技能市场页面，预加载默认榜单并交由客户端继续交互。 */
+/** 技能市场页面，首屏优先读取本地缓存，再交由客户端继续交互。 */
 export default async function MarketPage({
   searchParams,
 }: {
@@ -20,7 +20,7 @@ export default async function MarketPage({
 }) {
   const params = await searchParams;
   const ranking = parseRanking(params.ranking);
-  const collection = await listMarketplaceSkills({
+  const collection = await readCachedMarketplaceSkills({
     source: "skills_sh",
     ranking,
     page: 1,

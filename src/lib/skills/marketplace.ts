@@ -113,6 +113,25 @@ function paginateCollection(
   };
 }
 
+/** 构造首屏无缓存时使用的空榜单结果，避免服务端阻塞等待远端抓取。 */
+function createEmptyCollection(
+  source: MarketSourceId,
+  ranking: MarketRanking,
+  page: number,
+  pageSize: number,
+): MarketSkillCollection {
+  return {
+    source,
+    ranking,
+    fetchedAt: new Date(0).toISOString(),
+    items: [],
+    total: 0,
+    page,
+    pageSize,
+    hasMore: false,
+  };
+}
+
 /** 确保市场缓存文件所在目录存在。 */
 async function ensureMarketCacheDirectory() {
   await mkdir(MARKET_CACHE_DIRECTORY, { recursive: true });
@@ -634,6 +653,32 @@ export async function listMarketplaceSkills(options?: {
       error: error instanceof Error ? error.message : "加载技能市场失败。",
     } satisfies MarketSkillCollection;
   }
+}
+
+/** 仅从本地缓存读取某个榜单，供首屏渲染快速回退使用。 */
+export async function readCachedMarketplaceSkills(options?: {
+  source?: MarketSourceId;
+  ranking?: MarketRanking;
+  page?: number;
+  pageSize?: number;
+}) {
+  const source = options?.source ?? "skills_sh";
+  const ranking = options?.ranking ?? "trending";
+  const normalized = normalizePagination(options?.page, options?.pageSize);
+  const cacheKey = createCollectionCacheKey(source, ranking);
+  const document = await readMarketCacheDocument();
+  const cached = document.collections[cacheKey]?.data;
+
+  if (!cached) {
+    return createEmptyCollection(
+      source,
+      ranking,
+      normalized.page,
+      normalized.pageSize,
+    );
+  }
+
+  return paginateCollection(cached, normalized.page, normalized.pageSize);
 }
 
 /** 读取单个市场条目的详情信息，支持缓存命中与强制刷新。 */

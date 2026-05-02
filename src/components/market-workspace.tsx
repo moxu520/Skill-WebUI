@@ -48,6 +48,10 @@ function formatTimestamp(input: string) {
     return input;
   }
 
+  if (date.getTime() === 0) {
+    return "未缓存";
+  }
+
   const parts = new Intl.DateTimeFormat("zh-CN", {
     timeZone: "Asia/Shanghai",
     year: "numeric",
@@ -119,6 +123,7 @@ export function MarketWorkspace({
   const [loadingMore, setLoadingMore] = useState(false);
   const listScrollAreaRef = useRef<HTMLDivElement | null>(null);
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
+  const hasRequestedInitialCollectionRef = useRef(false);
   const collection = overrideCollection ?? initialCollection;
   const ranking = collection.ranking;
 
@@ -196,9 +201,9 @@ export function MarketWorkspace({
         setSelectedUrl(payload.items[0]?.detailUrl ?? "");
       }
 
-      if (payload.error) {
+      if (payload.error && refresh) {
         toast({
-          title: "已显示缓存数据",
+          title: "刷新失败，已显示缓存数据",
           description: payload.error,
           variant: "error",
         });
@@ -206,6 +211,16 @@ export function MarketWorkspace({
     },
     [collection.items, collection.pageSize, ranking, selectedUrl, toast],
   );
+
+  /** 首屏若未命中缓存，则在客户端挂载后补拉当前榜单。 */
+  useEffect(() => {
+    if (collection.items.length || hasRequestedInitialCollectionRef.current) {
+      return;
+    }
+
+    hasRequestedInitialCollectionRef.current = true;
+    void loadCollection({ page: 1 });
+  }, [collection.items.length, loadCollection]);
 
   /** 拉取当前选中市场条目的详情。 */
   useEffect(() => {
@@ -536,33 +551,53 @@ export function MarketWorkspace({
                           </div>
                         </div>
 
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="ghost"
-                          disabled={!item.canImport || !!activeImportUrl}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            void handleImport(item);
-                          }}
-                        >
-                          {isImporting ? (
-                            <LoaderCircle className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Download className="h-4 w-4" />
-                          )}
-                          导入
-                        </Button>
+                        <div className="shrink-0">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            disabled={!item.canImport || !!activeImportUrl}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void handleImport(item);
+                            }}
+                          >
+                            {isImporting ? (
+                              <LoaderCircle className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Download className="h-4 w-4" />
+                            )}
+                            导入
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   );
                 })
               ) : (
                 <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-5 py-12 text-center">
-                  <p className="text-sm font-medium text-slate-900">没有匹配的市场技能</p>
-                  <p className="mt-1 text-sm text-slate-500">
-                    换一个关键词，或者切换到别的榜单再看看。
-                  </p>
+                  {loadingCollection ? (
+                    <>
+                      <div className="flex justify-center">
+                        <LoaderCircle className="h-5 w-5 animate-spin text-slate-400" />
+                      </div>
+                      <p className="mt-3 text-sm font-medium text-slate-900">
+                        正在加载市场技能
+                      </p>
+                      <p className="mt-1 text-sm text-slate-500">
+                        首屏优先展示工作区，榜单数据会在后台补齐。
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-sm font-medium text-slate-900">
+                        没有匹配的市场技能
+                      </p>
+                      <p className="mt-1 text-sm text-slate-500">
+                        换一个关键词，或者切换到别的榜单再看看。
+                      </p>
+                    </>
+                  )}
                 </div>
               )}
 
