@@ -6,6 +6,7 @@ import {
   GitBranch,
   Import,
   LoaderCircle,
+  FolderSearch2,
   RefreshCw,
   Search,
 } from "lucide-react";
@@ -23,11 +24,24 @@ type ImportSuccessPayload = {
   name: string;
 };
 
+/** 单次导入接口返回的技能对象。 */
+type ImportApiResponse = {
+  skill?: ImportSuccessPayload;
+  error?: string;
+};
+
 /** Git 仓库扫描接口的成功返回结构。 */
 type GitDiscoveryResponse = {
   sessionId: string;
   repositoryUrl: string;
   skills: DiscoveredSkillSummary[];
+};
+
+/** Git 扫描或同步时在界面展示的轻量进度信息。 */
+type GitProgressState = {
+  current: number;
+  total: number;
+  message: string;
 };
 
 /** 将 ISO 时间格式化为界面可读的本地时间。 */
@@ -135,7 +149,7 @@ function ImportCandidateList({
                     type="button"
                     size="sm"
                     onClick={() => void onImport(skill)}
-                    disabled={!isImportable || isCurrentImport}
+                    disabled={!isImportable || saving || isCurrentImport}
                   >
                     {isCurrentImport ? (
                       <LoaderCircle className="h-4 w-4 animate-spin" />
@@ -179,10 +193,12 @@ function ImportCandidateList({
 export function SkillImportForm({
   compact = false,
   initialDiscoveredSkills = [],
+  onBatchSuccess,
   onSuccess,
 }: {
   compact?: boolean;
   initialDiscoveredSkills?: DiscoveredSkillSummary[];
+  onBatchSuccess?: (skills: ImportSuccessPayload[]) => void;
   onSuccess?: (skill: ImportSuccessPayload) => void;
 }) {
   const router = useRouter();
@@ -197,6 +213,8 @@ export function SkillImportForm({
   const [loadingGitSkills, setLoadingGitSkills] = useState(false);
   const [activeImportKey, setActiveImportKey] = useState("");
   const [saving, setSaving] = useState(false);
+  const [gitProgress, setGitProgress] = useState<GitProgressState | null>(null);
+  const importableGitSkills = gitSkills.filter((skill) => skill.status === "importable");
 
   /** 在导入成功后关闭本次流程，并跳转或回传结果。 */
   function handleImportSuccess(skill: ImportSuccessPayload) {
@@ -213,25 +231,59 @@ export function SkillImportForm({
     router.push(`/skills?skill=${encodeURIComponent(skill.id)}`);
   }
 
-  /** 执行导入请求，并统一处理成功与错误提示。 */
-  async function submitImport(payload: object, importKey: string) {
-    setSaving(true);
-    setActiveImportKey(importKey);
-
+  /** 调用导入接口，并返回统一的成功或错误结果。 */
+  async function requestImport(payload: object) {
     const response = await fetch("/api/skills/import", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    const body = (await response.json()) as {
-      error?: string;
-      skill?: ImportSuccessPayload;
-    };
+    const body = (await response.json()) as ImportApiResponse;
 
     if (!response.ok || !body.skill) {
+      return {
+        error: body.error ?? "导入技能失败。",
+      };
+    }
+
+    return {
+      skill: body.skill,
+    };
+  }
+
+  /** 将已同步的 Git 候选即时标记为冲突，避免重复导入。 */
+  function markGitSkillsImported(relativeSkillPaths: string[]) {
+    const importedPathSet = new Set(relativeSkillPaths);
+
+    setGitSkills((current) =>
+      current.map((skill) => {
+        if (
+          skill.sourceKind !== "git" ||
+          !skill.relativeSkillPath ||
+          !importedPathSet.has(skill.relativeSkillPath)
+        ) {
+          return skill;
+        }
+
+        return {
+          ...skill,
+          status: "conflict",
+          statusReason: "已同步到受管技能目录。",
+        };
+      }),
+    );
+  }
+
+  /** 执行导入请求，并统一处理成功与错误提示。 */
+  async function submitImport(payload: object, importKey: string) {
+    setSaving(true);
+    setActiveImportKey(importKey);
+    const result = await requestImport(payload);
+
+    if (!result.skill) {
       toast({
         title: "导入失败",
-        description: body.error ?? "导入技能失败。",
+        description: result.error ?? "导入技能失败。",
         variant: "error",
       });
       setSaving(false);
@@ -239,7 +291,7 @@ export function SkillImportForm({
       return;
     }
 
-    handleImportSuccess(body.skill);
+    handleImportSuccess(result.skill);
     setSaving(false);
     setActiveImportKey("");
   }
@@ -271,11 +323,21 @@ export function SkillImportForm({
   /** 扫描 Git 仓库中的 skill 候选目录。 */
   async function loadGitSkills() {
     setLoadingGitSkills(true);
+    setGitProgress({
+      current: 1,
+      total: 3,
+      message: "正在连接仓库并拉取默认分支…",
+    });
 
     const response = await fetch("/api/skills/import/git/discover", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ repositoryUrl }),
+    });
+    setGitProgress({
+      current: 2,
+      total: 3,
+      message: "正在解析仓库结构并查找 Skill…",
     });
     const payload = (await response.json()) as Partial<GitDiscoveryResponse> & {
       error?: string;
@@ -288,11 +350,17 @@ export function SkillImportForm({
         variant: "error",
       });
       setLoadingGitSkills(false);
+      setGitProgress(null);
       return;
     }
 
     setGitSkills(payload.skills);
     setLoadingGitSkills(false);
+    setGitProgress({
+      current: 3,
+      total: 3,
+      message: `扫描完成，找到 ${payload.skills.length} 个 Skill 候选。`,
+    });
   }
 
   /** 按指定本地路径执行导入。 */
@@ -325,6 +393,109 @@ export function SkillImportForm({
       },
       getCandidateKey(skill),
     );
+  }
+
+  /** 一次性同步当前仓库里全部可导入的技能目录。 */
+  async function syncAllGitSkills() {
+    if (!importableGitSkills.length) {
+      toast({
+        title: "没有可同步的技能",
+        description: "当前扫描结果里没有可批量导入的 Git Skill。",
+        variant: "error",
+      });
+      return;
+    }
+
+    setSaving(true);
+    setActiveImportKey("__git-bulk-sync__");
+    setGitProgress({
+      current: 0,
+      total: importableGitSkills.length,
+      message: `准备同步 ${importableGitSkills.length} 个 Skill…`,
+    });
+
+    const importedSkills: ImportSuccessPayload[] = [];
+    const importedPaths: string[] = [];
+    const failedSkills: string[] = [];
+
+    for (const skill of importableGitSkills) {
+      if (!skill.sessionId || !skill.relativeSkillPath) {
+        failedSkills.push(skill.name);
+        continue;
+      }
+
+      setGitProgress({
+        current: importedSkills.length + failedSkills.length + 1,
+        total: importableGitSkills.length,
+        message: `正在同步 ${skill.name}…`,
+      });
+
+      const result = await requestImport({
+        sourceType: "git",
+        sessionId: skill.sessionId,
+        relativeSkillPath: skill.relativeSkillPath,
+      });
+
+      if (result.skill) {
+        importedSkills.push(result.skill);
+        importedPaths.push(skill.relativeSkillPath);
+        continue;
+      }
+
+      failedSkills.push(skill.name);
+    }
+
+    setSaving(false);
+    setActiveImportKey("");
+
+    if (importedPaths.length) {
+      markGitSkillsImported(importedPaths);
+    }
+
+    if (!importedSkills.length) {
+      toast({
+        title: "同步失败",
+        description: failedSkills.length
+          ? `共 ${failedSkills.length} 个 Skill 同步失败，请检查仓库扫描结果后重试。`
+          : "没有成功同步任何 Skill。",
+        variant: "error",
+      });
+      setGitProgress({
+        current: importableGitSkills.length,
+        total: importableGitSkills.length,
+        message: `同步结束，成功 0 个，失败 ${failedSkills.length} 个。`,
+      });
+      return;
+    }
+
+    setGitProgress({
+      current: importableGitSkills.length,
+      total: importableGitSkills.length,
+      message:
+        failedSkills.length > 0
+          ? `同步结束，成功 ${importedSkills.length} 个，失败 ${failedSkills.length} 个。`
+          : `同步完成，已导入 ${importedSkills.length} 个 Skill。`,
+    });
+
+    if (onBatchSuccess) {
+      onBatchSuccess(importedSkills);
+      return;
+    }
+
+    const lastImportedSkill = importedSkills.at(-1);
+
+    toast({
+      title: "同步完成",
+      description:
+        failedSkills.length > 0
+          ? `已同步 ${importedSkills.length} 个 Skill，另有 ${failedSkills.length} 个失败。`
+          : `已同步 ${importedSkills.length} 个 Skill。`,
+      variant: "success",
+    });
+
+    if (lastImportedSkill) {
+      router.push(`/skills?skill=${encodeURIComponent(lastImportedSkill.id)}`);
+    }
   }
 
   /** 处理手动路径导入表单的提交行为。 */
@@ -367,9 +538,18 @@ export function SkillImportForm({
           className={compact ? "min-h-0 flex-1 gap-5" : "gap-5"}
         >
           <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="discover">自动扫描</TabsTrigger>
-            <TabsTrigger value="manual">手动路径</TabsTrigger>
-            <TabsTrigger value="git">Git 仓库</TabsTrigger>
+            <TabsTrigger value="discover" className="gap-2">
+              <Search className="h-4 w-4" />
+              自动扫描
+            </TabsTrigger>
+            <TabsTrigger value="manual" className="gap-2">
+              <FolderSearch2 className="h-4 w-4" />
+              手动路径
+            </TabsTrigger>
+            <TabsTrigger value="git" className="gap-2">
+              <GitBranch className="h-4 w-4" />
+              Git 仓库
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent
@@ -480,10 +660,52 @@ export function SkillImportForm({
                     )}
                     扫描仓库
                   </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void syncAllGitSkills()}
+                    disabled={saving || loadingGitSkills || !importableGitSkills.length}
+                  >
+                    {saving && activeImportKey === "__git-bulk-sync__" ? (
+                      <LoaderCircle className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Import className="h-4 w-4" />
+                    )}
+                    全部同步
+                  </Button>
                 </div>
                 <p className="text-sm text-slate-500">
                   只扫描默认分支，自动递归查找仓库内所有 `SKILL.md` 与 `skill.md`。
                 </p>
+                {gitProgress ? (
+                  <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
+                    <div className="flex items-center gap-2">
+                      {(loadingGitSkills || saving) && (
+                        <LoaderCircle className="h-4 w-4 animate-spin text-slate-400" />
+                      )}
+                      <span>{gitProgress.message}</span>
+                    </div>
+                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                      <div
+                        className="h-full rounded-full bg-slate-900 transition-[width] duration-300"
+                        style={{
+                          width:
+                            gitProgress.total > 0
+                              ? `${Math.max(
+                                  8,
+                                  Math.min(100, (gitProgress.current / gitProgress.total) * 100),
+                                )}%`
+                              : "8%",
+                        }}
+                      />
+                    </div>
+                    <div className="mt-1 text-xs text-slate-400">
+                      {gitProgress.total > 0
+                        ? `${Math.min(gitProgress.current, gitProgress.total)}/${gitProgress.total}`
+                        : "0/0"}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </form>
 

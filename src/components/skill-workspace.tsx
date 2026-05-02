@@ -478,6 +478,21 @@ export function SkillWorkspace({
                     <SkillImportForm
                       compact
                       initialDiscoveredSkills={initialDiscoveredSkills}
+                      onBatchSuccess={(skills) => {
+                        const lastSkill = skills.at(-1);
+
+                        setImportOpen(false);
+                        toast({
+                          title: "技能已同步",
+                          description: `已同步 ${skills.length} 个技能。`,
+                          variant: "success",
+                        });
+                        void refreshSkills();
+
+                        if (lastSkill) {
+                          updateQuery(lastSkill.id);
+                        }
+                      }}
                       onSuccess={(skill) => {
                         setImportOpen(false);
                         toast({
