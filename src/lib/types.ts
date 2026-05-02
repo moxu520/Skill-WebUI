@@ -25,3 +25,21 @@ export type CreateSkillInput = SkillDraft & {
 export type ImportSkillInput = {
   sourcePath: string;
 };
+
+export type DiscoveryStatus = "importable" | "conflict" | "invalid";
+
+export type DiscoveredSkillSummary = {
+  id: string;
+  name: string;
+  description: string;
+  sourcePath: string;
+  sourceKind: "discovered";
+  sourceLabel: string;
+  updatedAt: string;
+  status: DiscoveryStatus;
+  statusReason: string;
+};
+
+export type ScanRootConfig = {
+  extraRoots: string[];
+};

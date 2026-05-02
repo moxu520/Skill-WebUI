@@ -13,7 +13,10 @@ function DialogOverlay({
 }: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
   return (
     <DialogPrimitive.Overlay
-      className={cn("fixed inset-0 z-50 bg-slate-950/30 backdrop-blur-sm", className)}
+      className={cn(
+        "fixed inset-0 z-50 bg-slate-950/30 backdrop-blur-sm transition-opacity duration-200 data-[state=closed]:animate-[fade-out_180ms_ease-in] data-[state=open]:animate-[fade-in_180ms_ease-out]",
+        className,
+      )}
       {...props}
     />
   );
@@ -29,7 +32,7 @@ function DialogContent({
       <DialogOverlay />
       <DialogPrimitive.Content
         className={cn(
-          "fixed left-1/2 top-1/2 z-50 w-[min(960px,calc(100vw-32px))] max-h-[calc(100vh-32px)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl",
+          "fixed left-1/2 top-1/2 z-50 flex w-[min(960px,calc(100vw-32px))] max-h-[calc(100vh-32px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl transition-opacity duration-200 data-[state=closed]:animate-[fade-out_160ms_ease-in] data-[state=open]:animate-[fade-in_200ms_ease-out]",
           className,
         )}
         {...props}
@@ -45,7 +48,9 @@ function DialogContent({
 }
 
 function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
-  return <div className={cn("flex flex-col gap-1 px-5 pt-5", className)} {...props} />;
+  return (
+    <div className={cn("shrink-0 flex flex-col gap-1 px-5 pt-5", className)} {...props} />
+  );
 }
 
 function DialogTitle({

@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/app-shell";
 import { SkillWorkspace } from "@/components/skill-workspace";
 import { skillsRoot } from "@/lib/skills/config";
+import { listDiscoveredSkills } from "@/lib/skills/discovery";
 import { listSkills } from "@/lib/skills/skill-repository";
 
 export default async function SkillsPage({
@@ -9,7 +10,10 @@ export default async function SkillsPage({
   searchParams: Promise<{ skill?: string }>;
 }) {
   const params = await searchParams;
-  const skills = await listSkills();
+  const [skills, discoveredSkills] = await Promise.all([
+    listSkills(),
+    listDiscoveredSkills(),
+  ]);
 
   return (
     <AppShell
@@ -19,6 +23,7 @@ export default async function SkillsPage({
     >
       <SkillWorkspace
         initialSkills={skills}
+        initialDiscoveredSkills={discoveredSkills}
         initialSelectedId={params.skill}
         skillsRoot={skillsRoot}
       />

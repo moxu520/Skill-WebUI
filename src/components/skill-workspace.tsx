@@ -60,10 +60,11 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import type { SkillDetail, SkillSummary } from "@/lib/types";
+import type { DiscoveredSkillSummary, SkillDetail, SkillSummary } from "@/lib/types";
 
 type SkillWorkspaceProps = {
   initialSkills: SkillSummary[];
+  initialDiscoveredSkills: DiscoveredSkillSummary[];
   initialSelectedId?: string;
   skillsRoot: string;
 };
@@ -118,6 +119,7 @@ function IconButton({
 
 export function SkillWorkspace({
   initialSkills,
+  initialDiscoveredSkills,
   initialSelectedId,
   skillsRoot,
 }: SkillWorkspaceProps) {
@@ -354,14 +356,23 @@ export function SkillWorkspace({
                       导入
                     </Button>
                   </DialogTrigger>
-                  <DialogContent>
+                  <DialogContent className="h-[min(820px,calc(100vh-32px))]">
                     <DialogHeader>
                       <DialogTitle>导入技能</DialogTitle>
                       <DialogDescription>
                         从本地目录导入一个已有技能，目录中需要包含 `SKILL.md`。
                       </DialogDescription>
                     </DialogHeader>
-                    <SkillImportForm compact onSuccess={() => setImportOpen(false)} />
+                    <SkillImportForm
+                      compact
+                      initialDiscoveredSkills={initialDiscoveredSkills}
+                      onSuccess={(skillId) => {
+                        setImportOpen(false);
+                        setMessage("技能已导入。");
+                        void refreshSkills();
+                        updateQuery(skillId);
+                      }}
+                    />
                   </DialogContent>
                 </Dialog>
                 <Dialog open={createOpen} onOpenChange={setCreateOpen}>

@@ -15,7 +15,7 @@ function TabsList({
   return (
     <TabsPrimitive.List
       className={cn(
-        "inline-flex h-9 items-center rounded-md bg-slate-100 p-1 text-slate-500",
+        "inline-flex min-h-10 items-center rounded-lg bg-slate-100 p-1 text-slate-500",
         className,
       )}
       {...props}
@@ -30,7 +30,7 @@ function TabsTrigger({
   return (
     <TabsPrimitive.Trigger
       className={cn(
-        "inline-flex items-center justify-center rounded-sm px-3 py-1.5 text-sm font-medium transition data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm",
+        "inline-flex min-h-8 items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium transition-all duration-200 ease-out data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm",
         className,
       )}
       {...props}
@@ -42,7 +42,15 @@ function TabsContent({
   className,
   ...props
 }: React.ComponentProps<typeof TabsPrimitive.Content>) {
-  return <TabsPrimitive.Content className={cn("outline-none", className)} {...props} />;
+  return (
+    <TabsPrimitive.Content
+      className={cn(
+        "outline-none data-[state=active]:animate-[fade-in_180ms_ease-out]",
+        className,
+      )}
+      {...props}
+    />
+  );
 }
 
 export { Tabs, TabsContent, TabsList, TabsTrigger };
