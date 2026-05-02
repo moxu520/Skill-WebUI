@@ -6,6 +6,11 @@ import { sanitizeSkillId } from "@/lib/skills/path-guard";
 import { parseSkillMarkdown } from "@/lib/skills/skill-parser";
 import type { DiscoveredSkillSummary } from "@/lib/types";
 
+/**
+ * 负责从常见技能目录和自定义扫描根中发现可导入的 Skill 候选。
+ * 该模块只做发现与判定，不直接写入受管目录。
+ */
+
 const SKILL_FILE = "SKILL.md";
 const MAX_SCAN_DEPTH = 2;
 const SKIPPED_DIRECTORY_NAMES = new Set([".git", "node_modules"]);
@@ -15,10 +20,12 @@ type DiscoveryCandidate = {
   sourceLabel: string;
 };
 
+/** 将任意路径规范化为绝对路径，便于目录范围比较。 */
 function normalizeAbsolute(target: string) {
   return path.resolve(target);
 }
 
+/** 判断候选路径是否已经位于受管技能根目录之内。 */
 function isInsideManagedRoot(target: string) {
   const root = normalizeAbsolute(skillsRoot);
   const absoluteTarget = normalizeAbsolute(target);
@@ -28,6 +35,7 @@ function isInsideManagedRoot(target: string) {
   );
 }
 
+/** 判断某个目录下是否存在可识别的 `SKILL.md` 文件。 */
 async function hasSkillFile(directory: string) {
   try {
     const fileStat = await stat(path.join(directory, SKILL_FILE));
@@ -37,6 +45,7 @@ async function hasSkillFile(directory: string) {
   }
 }
 
+/** 在限定深度内递归扫描单个根目录，收集候选技能目录。 */
 async function walkDiscoveryRoot(
   rootPath: string,
   sourceLabel: string,
@@ -75,6 +84,7 @@ async function walkDiscoveryRoot(
   );
 }
 
+/** 读取当前受管技能目录中的已有技能标识集合。 */
 async function readManagedSkillIds() {
   try {
     const entries = await readdir(skillsRoot, { withFileTypes: true });
@@ -84,6 +94,7 @@ async function readManagedSkillIds() {
   }
 }
 
+/** 将候选目录转换成前端可直接展示的发现结果摘要。 */
 async function toDiscoveredSummary(
   candidate: DiscoveryCandidate,
   managedIds: Set<string>,
@@ -140,6 +151,7 @@ async function toDiscoveredSummary(
   }
 }
 
+/** 扫描所有发现根目录，并返回按状态排序的候选技能列表。 */
 export async function listDiscoveredSkills() {
   const scanRoots = await listDiscoveryScanRoots();
   const found = new Map<string, DiscoveryCandidate>();

@@ -5,6 +5,7 @@ import { LoaderCircle, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 
+/** 自动发现扫描设置表单，维护额外扫描根目录列表。 */
 export function DiscoverySettingsForm({
   initialExtraRoots,
 }: {
@@ -24,6 +25,7 @@ export function DiscoverySettingsForm({
     [value],
   );
 
+  /** 将当前文本框中的路径列表写回扫描配置文件。 */
   async function handleSave() {
     setSaving(true);
     setError("");

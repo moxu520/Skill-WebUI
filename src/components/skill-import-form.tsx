@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import type { DiscoveredSkillSummary } from "@/lib/types";
 
+/** 将 ISO 时间格式化为界面可读的本地时间。 */
 function formatDate(input: string) {
   const date = new Date(input);
 
@@ -28,6 +29,7 @@ function formatDate(input: string) {
   }).format(date);
 }
 
+/** 根据候选状态选择对应的徽标视觉风格。 */
 function statusVariant(status: DiscoveredSkillSummary["status"]) {
   if (status === "importable") {
     return "accent";
@@ -36,6 +38,7 @@ function statusVariant(status: DiscoveredSkillSummary["status"]) {
   return "muted";
 }
 
+/** 技能导入表单，支持自动发现候选与手动路径导入两种模式。 */
 export function SkillImportForm({
   compact = false,
   initialDiscoveredSkills = [],
@@ -55,6 +58,7 @@ export function SkillImportForm({
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
+  /** 主动刷新自动发现候选列表。 */
   async function loadDiscoveredSkills() {
     setLoadingDiscovered(true);
     setError("");
@@ -72,6 +76,7 @@ export function SkillImportForm({
     setLoadingDiscovered(false);
   }
 
+  /** 按指定本地路径执行导入，并在成功后跳转到对应技能。 */
   async function importFromPath(nextPath: string) {
     setSaving(true);
     setActiveImportPath(nextPath);
@@ -99,6 +104,7 @@ export function SkillImportForm({
     setActiveImportPath("");
   }
 
+  /** 处理手动路径导入表单的提交行为。 */
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     await importFromPath(sourcePath);

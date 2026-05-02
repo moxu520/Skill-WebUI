@@ -1,9 +1,13 @@
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
 import { cn } from "@/lib/utils";
 
+/** 下拉菜单根节点。 */
 const DropdownMenu = DropdownMenuPrimitive.Root;
+/** 下拉菜单触发器。 */
 const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;
+/** 下拉菜单浮层门户。 */
 const DropdownMenuPortal = DropdownMenuPrimitive.Portal;
+/** 带统一样式的下拉菜单内容容器。 */
 const DropdownMenuContent = ({
   className,
   sideOffset = 6,
@@ -21,6 +25,7 @@ const DropdownMenuContent = ({
   </DropdownMenuPortal>
 );
 
+/** 带统一样式的下拉菜单选项。 */
 const DropdownMenuItem = ({
   className,
   ...props

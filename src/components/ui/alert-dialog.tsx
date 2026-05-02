@@ -1,12 +1,18 @@
 import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog";
 import { cn } from "@/lib/utils";
 
+/** 警示确认弹窗根节点。 */
 const AlertDialog = AlertDialogPrimitive.Root;
+/** 警示确认弹窗触发器。 */
 const AlertDialogTrigger = AlertDialogPrimitive.Trigger;
+/** 警示确认弹窗门户。 */
 const AlertDialogPortal = AlertDialogPrimitive.Portal;
+/** 警示确认操作按钮。 */
 const AlertDialogAction = AlertDialogPrimitive.Action;
+/** 警示取消按钮。 */
 const AlertDialogCancel = AlertDialogPrimitive.Cancel;
 
+/** 警示弹窗背景遮罩。 */
 function AlertDialogOverlay({
   className,
   ...props
@@ -19,6 +25,7 @@ function AlertDialogOverlay({
   );
 }
 
+/** 警示弹窗主体容器。 */
 function AlertDialogContent({
   className,
   ...props
@@ -37,6 +44,7 @@ function AlertDialogContent({
   );
 }
 
+/** 警示弹窗头部区域。 */
 function AlertDialogHeader({
   className,
   ...props
@@ -44,6 +52,7 @@ function AlertDialogHeader({
   return <div className={cn("flex flex-col gap-2", className)} {...props} />;
 }
 
+/** 警示弹窗底部操作区。 */
 function AlertDialogFooter({
   className,
   ...props
@@ -51,6 +60,7 @@ function AlertDialogFooter({
   return <div className={cn("mt-6 flex justify-end gap-2", className)} {...props} />;
 }
 
+/** 警示弹窗标题。 */
 function AlertDialogTitle({
   className,
   ...props
@@ -63,6 +73,7 @@ function AlertDialogTitle({
   );
 }
 
+/** 警示弹窗说明文本。 */
 function AlertDialogDescription({
   className,
   ...props

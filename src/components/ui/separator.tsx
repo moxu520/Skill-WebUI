@@ -1,6 +1,7 @@
 import * as SeparatorPrimitive from "@radix-ui/react-separator";
 import { cn } from "@/lib/utils";
 
+/** 用于分隔内容区域的细线组件。 */
 function Separator({
   className,
   orientation = "horizontal",

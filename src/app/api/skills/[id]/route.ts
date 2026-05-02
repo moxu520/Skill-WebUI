@@ -5,6 +5,7 @@ import {
   updateSkill,
 } from "@/lib/skills/skill-repository";
 
+/** 按技能标识读取单个技能详情。 */
 export async function GET(
   _request: Request,
   context: { params: Promise<{ id: string }> },
@@ -21,6 +22,7 @@ export async function GET(
   }
 }
 
+/** 按技能标识更新技能内容或目录标识。 */
 export async function PUT(
   request: Request,
   context: { params: Promise<{ id: string }> },
@@ -38,6 +40,7 @@ export async function PUT(
   }
 }
 
+/** 按技能标识删除整个技能目录。 */
 export async function DELETE(
   _request: Request,
   context: { params: Promise<{ id: string }> },

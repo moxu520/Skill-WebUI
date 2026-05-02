@@ -10,6 +10,7 @@ const secondaryNavigation = [
   { href: "/settings", label: "全局设置", icon: Settings },
 ];
 
+/** 应用壳层组件的输入参数。 */
 type AppShellProps = {
   title: string;
   description: string;
@@ -18,6 +19,7 @@ type AppShellProps = {
   children: React.ReactNode;
 };
 
+/** 提供左侧导航、页头和主内容区的统一应用壳层。 */
 export function AppShell({
   title,
   description,

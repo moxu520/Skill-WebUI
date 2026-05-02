@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
+/** 新建技能表单，支持页面态和弹窗态两种展示方式。 */
 export function SkillCreateForm({
   compact = false,
   onSuccess,
@@ -33,6 +34,7 @@ export function SkillCreateForm({
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
+  /** 提交新技能创建请求，并在成功后跳转到详情视图。 */
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);

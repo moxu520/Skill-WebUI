@@ -7,6 +7,7 @@ import {
 } from "@/lib/skills/discovery-config";
 import { skillsRoot } from "@/lib/skills/config";
 
+/** 设置页，展示受管目录和自动发现相关配置。 */
 export default async function SettingsPage() {
   const [scanRootConfig, defaultDiscoveryRoots] = await Promise.all([
     readScanRootConfig(),

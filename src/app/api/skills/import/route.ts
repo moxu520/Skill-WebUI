@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { importSkill } from "@/lib/skills/skill-repository";
 
+/** 从外部本地目录导入技能。 */
 export async function POST(request: Request) {
   try {
     const body = await request.json();

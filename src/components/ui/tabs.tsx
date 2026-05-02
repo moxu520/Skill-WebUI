@@ -1,6 +1,7 @@
 import * as TabsPrimitive from "@radix-ui/react-tabs";
 import { cn } from "@/lib/utils";
 
+/** 标签页根容器。 */
 function Tabs({
   className,
   ...props
@@ -8,6 +9,7 @@ function Tabs({
   return <TabsPrimitive.Root className={cn("flex flex-col gap-4", className)} {...props} />;
 }
 
+/** 标签页按钮列表容器。 */
 function TabsList({
   className,
   ...props
@@ -23,6 +25,7 @@ function TabsList({
   );
 }
 
+/** 单个标签页切换按钮。 */
 function TabsTrigger({
   className,
   ...props
@@ -38,6 +41,7 @@ function TabsTrigger({
   );
 }
 
+/** 当前标签页对应的内容区域。 */
 function TabsContent({
   className,
   ...props

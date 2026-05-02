@@ -4,6 +4,7 @@ import {
   writeScanRootConfig,
 } from "@/lib/skills/discovery-config";
 
+/** 读取当前自动发现扫描根目录配置。 */
 export async function GET() {
   try {
     const config = await readScanRootConfig();
@@ -16,6 +17,7 @@ export async function GET() {
   }
 }
 
+/** 更新自动发现扫描根目录配置。 */
 export async function PUT(request: Request) {
   try {
     const body = (await request.json()) as { extraRoots?: unknown };

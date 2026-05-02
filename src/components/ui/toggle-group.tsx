@@ -1,6 +1,7 @@
 import * as ToggleGroupPrimitive from "@radix-ui/react-toggle-group";
 import { cn } from "@/lib/utils";
 
+/** 互斥或多选切换按钮组容器。 */
 function ToggleGroup({
   className,
   ...props
@@ -13,6 +14,7 @@ function ToggleGroup({
   );
 }
 
+/** 切换按钮组中的单个选项。 */
 function ToggleGroupItem({
   className,
   ...props

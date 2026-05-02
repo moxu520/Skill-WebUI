@@ -4,6 +4,7 @@ import { skillsRoot } from "@/lib/skills/config";
 import { listDiscoveredSkills } from "@/lib/skills/discovery";
 import { listSkills } from "@/lib/skills/skill-repository";
 
+/** 技能工作区页面，汇总受管技能与自动发现候选。 */
 export default async function SkillsPage({
   searchParams,
 }: {

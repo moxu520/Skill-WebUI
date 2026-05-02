@@ -3,6 +3,7 @@ import path from "node:path";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import type { ScanRootConfig } from "@/lib/types";
 
+/** 自动发现功能的本地配置文件路径。 */
 const DEFAULT_HIDDEN_DIRS = [".codex", ".claude", ".agent"] as const;
 const DEFAULT_SKILL_DIRS = ["skill", "skills"] as const;
 const CONFIG_DIRECTORY = path.join(process.cwd(), ".skill-webui");
@@ -15,20 +16,24 @@ const defaultScanRootConfig: ScanRootConfig = {
   extraRoots: [],
 };
 
+/** 单个扫描根目录的结构化描述。 */
 export type DiscoveryScanRoot = {
   path: string;
   label: string;
   kind: "default" | "custom";
 };
 
+/** 将扫描路径统一转换为绝对路径。 */
 function toAbsolute(input: string) {
   return path.resolve(input.trim());
 }
 
+/** 对路径数组去重，避免重复扫描同一路径。 */
 function dedupePaths(paths: string[]) {
   return [...new Set(paths.map(toAbsolute))];
 }
 
+/** 根据一个基础目录生成默认的隐藏技能目录候选。 */
 function buildDefaultRoots(basePath: string) {
   return DEFAULT_HIDDEN_DIRS.flatMap((hiddenDir) =>
     DEFAULT_SKILL_DIRS.map((skillDir) => ({
@@ -39,10 +44,12 @@ function buildDefaultRoots(basePath: string) {
   );
 }
 
+/** 清洗用户维护的额外扫描目录。 */
 function normalizeExtraRoots(extraRoots: string[]) {
   return dedupePaths(extraRoots.filter((root) => root.trim() !== ""));
 }
 
+/** 返回系统默认的自动发现扫描根目录集合。 */
 export function getDefaultDiscoveryRoots() {
   return dedupeDiscoveryRoots([
     ...buildDefaultRoots(os.homedir()),
@@ -50,6 +57,7 @@ export function getDefaultDiscoveryRoots() {
   ]);
 }
 
+/** 对扫描根目录按绝对路径去重，并保留来源标签。 */
 function dedupeDiscoveryRoots(roots: DiscoveryScanRoot[]) {
   const seen = new Set<string>();
   const result: DiscoveryScanRoot[] = [];
@@ -71,6 +79,7 @@ function dedupeDiscoveryRoots(roots: DiscoveryScanRoot[]) {
   return result;
 }
 
+/** 读取自动发现扫描配置；文件缺失时回退到默认空配置。 */
 export async function readScanRootConfig(): Promise<ScanRootConfig> {
   try {
     const raw = await readFile(discoveryConfigPath, "utf8");
@@ -86,6 +95,7 @@ export async function readScanRootConfig(): Promise<ScanRootConfig> {
   }
 }
 
+/** 写入自动发现扫描配置，并返回规范化后的结果。 */
 export async function writeScanRootConfig(config: ScanRootConfig) {
   const normalized: ScanRootConfig = {
     extraRoots: normalizeExtraRoots(config.extraRoots),
@@ -101,6 +111,7 @@ export async function writeScanRootConfig(config: ScanRootConfig) {
   return normalized;
 }
 
+/** 汇总默认扫描目录和用户自定义扫描目录，返回最终扫描根列表。 */
 export async function listDiscoveryScanRoots() {
   const config = await readScanRootConfig();
   const customRoots = config.extraRoots.map((root) => ({

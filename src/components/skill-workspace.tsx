@@ -62,6 +62,10 @@ import {
 } from "@/components/ui/tooltip";
 import type { DiscoveredSkillSummary, SkillDetail, SkillSummary } from "@/lib/types";
 
+/**
+ * 技能工作区组件，负责管理左侧技能列表、自动发现候选、右侧详情面板
+ * 以及导入/新建弹窗之间的交互状态。
+ */
 type SkillWorkspaceProps = {
   initialSkills: SkillSummary[];
   initialDiscoveredSkills: DiscoveredSkillSummary[];
@@ -72,6 +76,7 @@ type SkillWorkspaceProps = {
 type SortMode = "updated" | "name";
 type ViewMode = "grid" | "list";
 
+/** 将技能更新时间格式化为工作区统一使用的文本。 */
 function formatDate(input: string) {
   const date = new Date(input);
 
@@ -100,6 +105,7 @@ function formatDate(input: string) {
   return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
 }
 
+/** 带提示文本的图标按钮，避免纯图标操作缺少语义。 */
 function IconButton({
   label,
   children,
@@ -117,6 +123,7 @@ function IconButton({
   );
 }
 
+/** 技能主工作区，串联列表、筛选、候选导入和详情编辑流程。 */
 export function SkillWorkspace({
   initialSkills,
   initialDiscoveredSkills,
@@ -147,6 +154,7 @@ export function SkillWorkspace({
   const [importOpen, setImportOpen] = useState(false);
   const selectedId = searchParams.get("skill") ?? initialSelectedId ?? "";
 
+  /** 当路由中的技能标识变化时，加载右侧详情面板数据。 */
   useEffect(() => {
     if (!selectedId) {
       return;
@@ -189,6 +197,7 @@ export function SkillWorkspace({
     };
   }, [selectedId]);
 
+  /** 根据搜索词和排序规则生成当前应显示的技能列表。 */
   const filteredSkills = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
     const next = skills.filter((skill) => {
@@ -213,6 +222,7 @@ export function SkillWorkspace({
     return next;
   }, [search, skills, sort]);
 
+  /** 将当前选中的技能标识同步到地址栏查询参数。 */
   function updateQuery(nextId: string) {
     const params = new URLSearchParams(searchParams.toString());
 
@@ -226,6 +236,7 @@ export function SkillWorkspace({
     router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname);
   }
 
+  /** 主动刷新受管技能列表。 */
   async function refreshSkills() {
     setRefreshing(true);
     setError("");
@@ -243,6 +254,7 @@ export function SkillWorkspace({
     setRefreshing(false);
   }
 
+  /** 保存右侧编辑态中的技能修改，并保持列表同步。 */
   async function saveSkill() {
     if (!selectedId) {
       return;
@@ -276,6 +288,7 @@ export function SkillWorkspace({
     }
   }
 
+  /** 删除当前选中的技能目录，并关闭对应详情。 */
   async function deleteSelectedSkill() {
     if (!selectedId) {
       return;

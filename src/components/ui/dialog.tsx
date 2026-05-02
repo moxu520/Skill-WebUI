@@ -2,11 +2,16 @@ import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+/** 通用弹窗根节点。 */
 const Dialog = DialogPrimitive.Root;
+/** 弹窗触发器。 */
 const DialogTrigger = DialogPrimitive.Trigger;
+/** 弹窗门户。 */
 const DialogPortal = DialogPrimitive.Portal;
+/** 弹窗关闭控制。 */
 const DialogClose = DialogPrimitive.Close;
 
+/** 弹窗背景遮罩。 */
 function DialogOverlay({
   className,
   ...props
@@ -22,6 +27,7 @@ function DialogOverlay({
   );
 }
 
+/** 带统一样式和关闭按钮的弹窗主体。 */
 function DialogContent({
   className,
   children,
@@ -47,12 +53,14 @@ function DialogContent({
   );
 }
 
+/** 弹窗头部区域。 */
 function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div className={cn("shrink-0 flex flex-col gap-1 px-5 pt-5", className)} {...props} />
   );
 }
 
+/** 弹窗标题。 */
 function DialogTitle({
   className,
   ...props
@@ -65,6 +73,7 @@ function DialogTitle({
   );
 }
 
+/** 弹窗描述文本。 */
 function DialogDescription({
   className,
   ...props
