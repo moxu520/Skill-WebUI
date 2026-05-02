@@ -6,7 +6,9 @@ function Tabs({
   className,
   ...props
 }: React.ComponentProps<typeof TabsPrimitive.Root>) {
-  return <TabsPrimitive.Root className={cn("flex flex-col gap-4", className)} {...props} />;
+  return (
+    <TabsPrimitive.Root className={cn("flex min-w-0 flex-col gap-4", className)} {...props} />
+  );
 }
 
 /** 标签页按钮列表容器。 */
@@ -17,7 +19,7 @@ function TabsList({
   return (
     <TabsPrimitive.List
       className={cn(
-        "inline-flex min-h-10 items-center rounded-lg bg-slate-100 p-1 text-slate-500",
+        "inline-flex min-h-10 min-w-0 items-center rounded-lg bg-slate-100 p-1 text-slate-500",
         className,
       )}
       {...props}
@@ -49,7 +51,7 @@ function TabsContent({
   return (
     <TabsPrimitive.Content
       className={cn(
-        "outline-none data-[state=active]:animate-[fade-in_180ms_ease-out]",
+        "min-w-0 w-full outline-none data-[state=active]:animate-[fade-in_180ms_ease-out]",
         className,
       )}
       {...props}

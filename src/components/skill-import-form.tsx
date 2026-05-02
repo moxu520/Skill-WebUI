@@ -58,6 +58,11 @@ export function SkillImportForm({
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
+  /** 判断给定来源路径是否正处于当前导入请求中。 */
+  function isImportingPath(nextPath: string) {
+    return saving && activeImportPath === nextPath;
+  }
+
   /** 主动刷新自动发现候选列表。 */
   async function loadDiscoveredSkills() {
     setLoadingDiscovered(true);
@@ -180,7 +185,7 @@ export function SkillImportForm({
                 ) : discoveredSkills.length ? (
                   discoveredSkills.map((skill) => {
                     const isImportable = skill.status === "importable";
-                    const isCurrentImport = saving && activeImportPath === skill.sourcePath;
+                    const isCurrentImport = isImportingPath(skill.sourcePath);
 
                     return (
                       <div
@@ -210,7 +215,7 @@ export function SkillImportForm({
                             type="button"
                             size="sm"
                             onClick={() => void importFromPath(skill.sourcePath)}
-                            disabled={!isImportable || saving}
+                            disabled={!isImportable || isCurrentImport}
                           >
                             {isCurrentImport ? (
                               <LoaderCircle className="h-4 w-4 animate-spin" />
@@ -270,8 +275,8 @@ export function SkillImportForm({
               </div>
 
               <div className="mt-auto flex justify-end pt-6">
-                <Button type="submit" disabled={saving}>
-                  {saving && activeImportPath === sourcePath ? (
+                <Button type="submit" disabled={isImportingPath(sourcePath)}>
+                  {isImportingPath(sourcePath) ? (
                     <LoaderCircle className="h-4 w-4 animate-spin" />
                   ) : (
                     <Import className="h-4 w-4" />

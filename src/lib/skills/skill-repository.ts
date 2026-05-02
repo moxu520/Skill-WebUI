@@ -139,7 +139,7 @@ export async function listSkills() {
 /** 读取单个技能的完整详情，包括 Markdown 原文与资源列表。 */
 export async function getSkill(id: string): Promise<SkillDetail> {
   const safeId = sanitizeSkillId(id);
-  const { parsed, raw, assets, updatedAt } = await readSkillMarkdown(safeId);
+  const { parsed, assets, updatedAt } = await readSkillMarkdown(safeId);
 
   return {
     id: safeId,
@@ -147,7 +147,11 @@ export async function getSkill(id: string): Promise<SkillDetail> {
     description: parsed.description,
     path: path.relative(process.cwd(), resolveSkillDir(safeId)),
     updatedAt,
-    contentMarkdown: raw,
+    contentMarkdown: buildSkillMarkdown({
+      title: parsed.title,
+      description: parsed.description,
+      bodyMarkdown: parsed.bodyMarkdown,
+    }),
     bodyMarkdown: parsed.bodyMarkdown,
     assets,
   };

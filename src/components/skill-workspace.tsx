@@ -5,7 +5,6 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowUpDown,
   Eye,
-  FileText,
   Grid2x2,
   List,
   LoaderCircle,
@@ -51,7 +50,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
@@ -520,7 +518,7 @@ export function SkillWorkspace({
           </ScrollArea>
         </section>
 
-        <aside className="hidden w-[420px] shrink-0 bg-white xl:flex xl:flex-col">
+        <aside className="hidden min-h-0 w-[420px] shrink-0 bg-white xl:flex xl:flex-col">
           {!selectedId ? (
             <div className="flex h-full items-center justify-center px-10 text-center">
               <div>
@@ -535,7 +533,7 @@ export function SkillWorkspace({
               <LoaderCircle className="h-5 w-5 animate-spin text-slate-400" />
             </div>
           ) : (
-            <div className="flex h-full flex-col">
+            <div className="flex h-full min-h-0 flex-col">
               <div className="border-b border-slate-200/80 px-5 py-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -598,23 +596,14 @@ export function SkillWorkspace({
                 </div>
               </div>
 
-              <ScrollArea className="flex-1">
-                <div className="p-5">
-                  <Tabs value={detailMode} onValueChange={(value) => setDetailMode(value as "preview" | "edit")}>
-                    <TabsList className="grid w-full grid-cols-2">
-                      <TabsTrigger value="preview">
-                        <Eye className="mr-2 h-4 w-4" />
-                        预览
-                      </TabsTrigger>
-                      <TabsTrigger value="edit">
-                        <FileText className="mr-2 h-4 w-4" />
-                        编辑
-                      </TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="preview" className="pt-1">
+              <ScrollArea className="min-h-0 flex-1">
+                <div className="min-w-0 p-5">
+                  {detailMode === "preview" ? (
+                    <div className="min-h-0 overflow-hidden pt-1">
                       <MarkdownViewer content={selectedSkill.contentMarkdown} />
-                    </TabsContent>
-                    <TabsContent value="edit" className="space-y-4 pt-1">
+                    </div>
+                  ) : (
+                    <div className="min-h-0 space-y-4 pt-1">
                       <div className="space-y-1">
                         <label className="text-sm font-medium text-slate-700">名称</label>
                         <Input
@@ -674,8 +663,8 @@ export function SkillWorkspace({
                           保存修改
                         </Button>
                       </div>
-                    </TabsContent>
-                  </Tabs>
+                    </div>
+                  )}
                 </div>
               </ScrollArea>
             </div>
