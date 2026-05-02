@@ -472,7 +472,7 @@ export function SkillWorkspace({
                     <DialogHeader>
                       <DialogTitle>导入技能</DialogTitle>
                       <DialogDescription>
-                        从本地目录导入一个已有技能，目录中需要包含 `SKILL.md`。
+                        从本地目录或 Git 仓库导入一个已有技能。
                       </DialogDescription>
                     </DialogHeader>
                     <SkillImportForm

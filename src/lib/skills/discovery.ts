@@ -12,6 +12,7 @@ import type { DiscoveredSkillSummary } from "@/lib/types";
  */
 
 const SKILL_FILE = "SKILL.md";
+const SKILL_FILE_LOWERCASE = "skill.md";
 const MAX_SCAN_DEPTH = 2;
 const SKIPPED_DIRECTORY_NAMES = new Set([".git", "node_modules"]);
 
@@ -37,12 +38,37 @@ function isInsideManagedRoot(target: string) {
 
 /** 判断某个目录下是否存在可识别的 `SKILL.md` 文件。 */
 async function hasSkillFile(directory: string) {
+  const uppercaseFileStat = await stat(path.join(directory, SKILL_FILE)).catch(() => null);
+
+  if (uppercaseFileStat?.isFile()) {
+    return true;
+  }
+
   try {
-    const fileStat = await stat(path.join(directory, SKILL_FILE));
-    return fileStat.isFile();
+    const lowercaseFileStat = await stat(path.join(directory, SKILL_FILE_LOWERCASE));
+    return lowercaseFileStat.isFile();
   } catch {
     return false;
   }
+}
+
+/** 返回候选目录中实际存在的技能主文件名，优先大写。 */
+async function resolveSkillFileName(directory: string) {
+  const uppercaseFileStat = await stat(path.join(directory, SKILL_FILE)).catch(() => null);
+
+  if (uppercaseFileStat?.isFile()) {
+    return SKILL_FILE;
+  }
+
+  const lowercaseFileStat = await stat(path.join(directory, SKILL_FILE_LOWERCASE)).catch(
+    () => null,
+  );
+
+  if (lowercaseFileStat?.isFile()) {
+    return SKILL_FILE_LOWERCASE;
+  }
+
+  throw new Error("所选目录中不包含 SKILL.md。");
 }
 
 /** 在限定深度内递归扫描单个根目录，收集候选技能目录。 */
@@ -102,7 +128,10 @@ async function toDiscoveredSummary(
   const id = path.basename(candidate.directory);
 
   try {
-    const skillFilePath = path.join(candidate.directory, SKILL_FILE);
+    const skillFilePath = path.join(
+      candidate.directory,
+      await resolveSkillFileName(candidate.directory),
+    );
     const [rawMarkdown, skillStat] = await Promise.all([
       readFile(skillFilePath, "utf8"),
       stat(skillFilePath),

@@ -26,10 +26,21 @@ export type CreateSkillInput = SkillDraft & {
   slug?: string;
 };
 
-/** 通过本地路径导入技能时的请求结构。 */
-export type ImportSkillInput = {
+/** 通过本地目录导入技能时的请求结构。 */
+export type LocalImportSkillInput = {
+  sourceType: "local";
   sourcePath: string;
 };
+
+/** 通过 Git 扫描会话导入技能时的请求结构。 */
+export type GitImportSkillInput = {
+  sourceType: "git";
+  sessionId: string;
+  relativeSkillPath: string;
+};
+
+/** 技能导入接口支持的全部请求结构。 */
+export type ImportSkillInput = LocalImportSkillInput | GitImportSkillInput;
 
 /** 自动发现候选技能时的可用状态。 */
 export type DiscoveryStatus = "importable" | "conflict" | "invalid";
@@ -40,11 +51,14 @@ export type DiscoveredSkillSummary = {
   name: string;
   description: string;
   sourcePath: string;
-  sourceKind: "discovered";
+  sourceKind: "discovered" | "git";
   sourceLabel: string;
   updatedAt: string;
   status: DiscoveryStatus;
   statusReason: string;
+  repositoryUrl?: string;
+  relativeSkillPath?: string;
+  sessionId?: string;
 };
 
 /** 扫描根目录配置的持久化结构。 */

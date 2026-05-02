@@ -9,7 +9,7 @@ export default async function ImportPage() {
   return (
     <AppShell
       title="导入技能"
-      description="将现有本地技能目录复制到受管技能目录中。"
+      description="从本地目录或 Git 仓库导入已有 Skill。"
       currentPath="/import"
     >
       <SkillImportForm initialDiscoveredSkills={discoveredSkills} />

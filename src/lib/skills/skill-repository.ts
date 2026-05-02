@@ -15,6 +15,12 @@ import {
 } from "@/lib/skills/skill-parser";
 import { ensureSkillsRoot, skillsRoot } from "@/lib/skills/config";
 import {
+  discoverGitSkillsFromRepository,
+  findSkillFileName,
+  normalizeImportedSkillFile,
+  resolveGitSkillDirectory,
+} from "@/lib/skills/git-import";
+import {
   assertInsideSkillsRoot,
   resolveSkillDir,
   sanitizeSkillId,
@@ -54,7 +60,8 @@ async function readDirectoryNames() {
 /** 读取单个技能目录中的 Markdown、资源列表和更新时间。 */
 async function readSkillMarkdown(id: string) {
   const directory = resolveSkillDir(id);
-  const filePath = path.join(directory, SKILL_FILE);
+  const fileName = await findSkillFileName(directory);
+  const filePath = path.join(directory, fileName);
   const raw = await readFile(filePath, "utf8");
   const parsed = parseSkillMarkdown(raw, id);
   const directoryEntries = await readdir(directory, { withFileTypes: true });
@@ -66,7 +73,7 @@ async function readSkillMarkdown(id: string) {
     raw,
     parsed,
     assets: directoryEntries
-      .filter((entry) => entry.name !== SKILL_FILE)
+      .filter((entry) => entry.name !== SKILL_FILE && entry.name !== "skill.md")
       .map((entry) => entry.name),
     updatedAt: skillStat.mtime.toISOString(),
   };
@@ -111,15 +118,7 @@ async function copyDirectory(source: string, target: string) {
 
 /** 校验目录中是否存在技能主文件，不存在时抛出明确错误。 */
 async function assertSkillFileExists(directory: string) {
-  try {
-    const fileStat = await stat(path.join(directory, SKILL_FILE));
-
-    if (!fileStat.isFile()) {
-      throw new Error("技能主文件不存在。");
-    }
-  } catch {
-    throw new Error("所选目录中不包含 SKILL.md。");
-  }
+  await findSkillFileName(directory);
 }
 
 /** 将技能目录转换成列表页需要的轻量摘要。 */
@@ -232,6 +231,10 @@ export async function deleteSkill(id: string) {
 
 /** 从外部本地目录导入技能，并复制到受管目录中。 */
 export async function importSkill(input: ImportSkillInput) {
+  if (input.sourceType === "git") {
+    return importGitSkill(input.sessionId, input.relativeSkillPath);
+  }
+
   const source = validateImportSource(input.sourcePath);
   const sourceStat = await stat(source);
 
@@ -251,6 +254,37 @@ export async function importSkill(input: ImportSkillInput) {
 
   try {
     await copyDirectory(source, targetDir);
+    await normalizeImportedSkillFile(targetDir);
+    await assertSkillFileExists(targetDir);
+    return await getSkill(targetId);
+  } catch (error) {
+    await rm(targetDir, { recursive: true, force: true });
+
+    throw error instanceof Error ? error : new Error("导入技能失败。");
+  }
+}
+
+/** 扫描 Git 仓库中的可导入技能目录，并返回候选列表。 */
+export async function discoverGitSkills(repositoryUrl: string) {
+  return discoverGitSkillsFromRepository(repositoryUrl);
+}
+
+/** 从 Git 扫描会话中导入指定技能目录。 */
+export async function importGitSkill(sessionId: string, relativeSkillPath: string) {
+  const source = await resolveGitSkillDirectory(sessionId, relativeSkillPath);
+  await assertSkillFileExists(source);
+
+  const targetId = sanitizeSkillId(path.basename(source));
+
+  if (await directoryExists(targetId)) {
+    throw new Error("同名目录的技能已存在。");
+  }
+
+  const targetDir = resolveSkillDir(targetId);
+
+  try {
+    await copyDirectory(source, targetDir);
+    await normalizeImportedSkillFile(targetDir);
     await assertSkillFileExists(targetDir);
     return await getSkill(targetId);
   } catch (error) {
