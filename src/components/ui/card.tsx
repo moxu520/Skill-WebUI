@@ -23,7 +23,7 @@ function CardHeader({ className, ...props }: React.ComponentProps<"div">) {
 function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
-      className={cn("text-sm font-semibold tracking-normal text-slate-900", className)}
+      className={cn("select-none text-sm font-semibold tracking-normal text-slate-900", className)}
       {...props}
     />
   );
@@ -31,7 +31,7 @@ function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
 
 /** 卡片描述文本。 */
 function CardDescription({ className, ...props }: React.ComponentProps<"p">) {
-  return <p className={cn("text-sm text-slate-500", className)} {...props} />;
+  return <p className={cn("select-none text-sm text-slate-500", className)} {...props} />;
 }
 
 /** 卡片主体内容区域。 */

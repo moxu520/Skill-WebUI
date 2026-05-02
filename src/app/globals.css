@@ -27,6 +27,18 @@ body {
   min-height: 100vh;
 }
 
+.ui-chrome,
+.ui-chrome * {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.copy-content,
+.copy-content * {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 @keyframes fade-in {
   from {
     opacity: 0;

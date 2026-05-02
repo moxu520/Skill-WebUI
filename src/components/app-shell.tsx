@@ -43,7 +43,7 @@ export function AppShell({
 }: AppShellProps) {
   return (
     <div className="flex min-h-screen bg-slate-50 text-slate-900">
-      <aside className="hidden w-64 border-r border-slate-200/80 bg-white/80 px-4 py-5 lg:flex lg:flex-col">
+      <aside className="ui-chrome hidden w-64 border-r border-slate-200/80 bg-white/80 px-4 py-5 lg:flex lg:flex-col">
         <div className="px-3">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-900 text-white">
@@ -121,7 +121,7 @@ export function AppShell({
       </aside>
 
       <div className="flex min-h-screen flex-1 flex-col">
-        <header className="border-b border-slate-200/80 bg-white/80 backdrop-blur">
+        <header className="ui-chrome border-b border-slate-200/80 bg-white/80 backdrop-blur">
           <div className="flex flex-col gap-4 px-5 py-4 lg:px-8">
             <div className="flex flex-col gap-1">
               <h1 className="text-xl font-semibold tracking-normal">{title}</h1>

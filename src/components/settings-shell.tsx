@@ -17,7 +17,7 @@ export function SettingsShell({ children }: SettingsShellProps) {
 
   return (
     <div className="flex w-full flex-1 flex-col gap-6 p-5 lg:flex-row lg:gap-6 lg:px-8 lg:py-8">
-      <aside className="w-full shrink-0 lg:w-72">
+      <aside className="ui-chrome w-full shrink-0 lg:w-72">
         <div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
           <div className="px-2 pb-3">
             <h2 className="text-sm font-semibold text-slate-900">设置分组</h2>

@@ -32,7 +32,7 @@ const DropdownMenuItem = ({
 }: React.ComponentProps<typeof DropdownMenuPrimitive.Item>) => (
   <DropdownMenuPrimitive.Item
     className={cn(
-      "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm text-slate-700 outline-none transition hover:bg-slate-100 focus:bg-slate-100",
+      "relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm text-slate-700 outline-none transition hover:bg-slate-100 focus:bg-slate-100",
       className,
     )}
     {...props}

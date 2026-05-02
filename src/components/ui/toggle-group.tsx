@@ -22,7 +22,7 @@ function ToggleGroupItem({
   return (
     <ToggleGroupPrimitive.Item
       className={cn(
-        "inline-flex h-8 items-center justify-center rounded-sm px-3 text-sm text-slate-600 transition hover:text-slate-900 data-[state=on]:bg-white data-[state=on]:text-slate-900 data-[state=on]:shadow-sm",
+        "inline-flex h-8 cursor-pointer select-none items-center justify-center rounded-sm px-3 text-sm text-slate-600 transition hover:text-slate-900 data-[state=on]:bg-white data-[state=on]:text-slate-900 data-[state=on]:shadow-sm",
         className,
       )}
       {...props}

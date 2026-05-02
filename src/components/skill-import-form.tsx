@@ -129,7 +129,7 @@ function ImportCandidateList({
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="truncate text-sm font-semibold text-slate-900">
+                      <p className="select-none truncate text-sm font-semibold text-slate-900">
                         {skill.name}
                       </p>
                       <Badge variant={statusVariant(skill.status)}>
@@ -141,7 +141,7 @@ function ImportCandidateList({
                       </Badge>
                       <Badge variant="muted">{skill.sourceLabel}</Badge>
                     </div>
-                    <p className="mt-1 text-sm text-slate-500">
+                    <p className="select-none mt-1 text-sm text-slate-500">
                       {skill.description || skill.statusReason}
                     </p>
                   </div>
@@ -161,17 +161,17 @@ function ImportCandidateList({
                 </div>
 
                 {skill.sourceKind === "git" && skill.repositoryUrl ? (
-                  <div className="mt-3 rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                  <div className="copy-content mt-3 rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-500">
                     <div className="truncate font-mono">{skill.repositoryUrl}</div>
                     <div className="mt-1 font-mono">{getCandidateLocation(skill)}</div>
                   </div>
                 ) : (
-                  <div className="mt-3 rounded-md bg-slate-50 px-3 py-2 font-mono text-xs text-slate-500">
+                  <div className="copy-content mt-3 rounded-md bg-slate-50 px-3 py-2 font-mono text-xs text-slate-500">
                     {getCandidateLocation(skill)}
                   </div>
                 )}
 
-                <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
+                <div className="ui-chrome mt-3 flex items-center justify-between text-xs text-slate-400">
                   <span>{skill.statusReason}</span>
                   <span>{formatDate(skill.updatedAt)}</span>
                 </div>
@@ -179,7 +179,7 @@ function ImportCandidateList({
             );
           })
         ) : (
-          <div className="rounded-lg border border-dashed border-slate-300 bg-white px-5 py-10 text-center">
+          <div className="ui-chrome rounded-lg border border-dashed border-slate-300 bg-white px-5 py-10 text-center">
             <p className="text-sm font-medium text-slate-900">{emptyTitle}</p>
             <p className="mt-1 text-sm text-slate-500">{emptyDescription}</p>
           </div>

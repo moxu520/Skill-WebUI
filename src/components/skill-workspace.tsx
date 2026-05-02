@@ -540,7 +540,7 @@ export function SkillWorkspace({
 
             <div className="mt-3 flex items-center gap-3 text-sm text-slate-500">
               <Badge variant="muted">共 {filteredSkills.length} 个技能</Badge>
-              <span className="truncate">{skillsRoot}</span>
+              <span className="copy-content truncate">{skillsRoot}</span>
             </div>
           </div>
 
@@ -568,7 +568,7 @@ export function SkillWorkspace({
                       <div className="flex items-start justify-between gap-3">
                         <button
                           type="button"
-                          className="min-w-0 text-left"
+                          className="min-w-0 cursor-pointer select-none text-left"
                           onClick={() => {
                             setDetailMode("preview");
                             updateQuery(skill.id);
@@ -581,7 +581,11 @@ export function SkillWorkspace({
                         </button>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="-m-1.5 h-10 w-10 rounded-md p-2.5"
+                            >
                               <MoreHorizontal className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>
@@ -609,10 +613,10 @@ export function SkillWorkspace({
                       </div>
                     </CardHeader>
                     <CardContent className="space-y-3">
-                      <div className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                      <div className="copy-content rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-500">
                         {skill.path}
                       </div>
-                      <div className="flex items-center justify-between text-xs text-slate-400">
+                      <div className="ui-chrome flex items-center justify-between text-xs text-slate-400">
                         <span>更新于</span>
                         <span>{formatDate(skill.updatedAt)}</span>
                       </div>
@@ -622,7 +626,7 @@ export function SkillWorkspace({
               })}
 
               {!filteredSkills.length ? (
-                <div className="col-span-full rounded-lg border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
+                <div className="ui-chrome col-span-full rounded-lg border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
                   <p className="text-base font-medium text-slate-900">没有找到技能</p>
                   <p className="mt-1 text-sm text-slate-500">
                     你可以先创建一个新技能，或者导入已有的本地目录。
@@ -636,7 +640,7 @@ export function SkillWorkspace({
         <aside className="hidden min-h-0 w-[420px] shrink-0 bg-white xl:flex xl:flex-col">
           {!selectedId ? (
             <div className="flex h-full items-center justify-center px-10 text-center">
-              <div>
+              <div className="ui-chrome">
                 <p className="text-base font-medium text-slate-900">请选择一个技能</p>
                 <p className="mt-1 text-sm text-slate-500">
                   选择左侧卡片后，可以在这里预览、编辑或删除该技能。
@@ -651,7 +655,7 @@ export function SkillWorkspace({
             <div className="flex h-full min-h-0 flex-col">
               <div className="border-b border-slate-200/80 px-5 py-4">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
+                  <div className="ui-chrome min-w-0">
                     <h2 className="truncate text-lg font-semibold">{selectedSkill.name}</h2>
                     <p className="mt-1 line-clamp-2 text-sm text-slate-500">
                       {selectedSkill.description || "暂无描述"}
@@ -706,7 +710,7 @@ export function SkillWorkspace({
                     <Badge variant="muted">{selectedSkill.assets.length} 个资源</Badge>
                   ) : null}
                 </div>
-                <div className="mt-4 rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                <div className="copy-content mt-4 rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-500">
                   {selectedSkill.path}
                 </div>
               </div>
@@ -720,7 +724,7 @@ export function SkillWorkspace({
                   ) : (
                     <div className="min-h-0 space-y-4 pt-1">
                       <div className="space-y-1">
-                        <label className="text-sm font-medium text-slate-700">名称</label>
+                        <label className="ui-chrome text-sm font-medium text-slate-700">名称</label>
                         <Input
                           value={draft.name}
                           onChange={(event) =>
@@ -729,7 +733,7 @@ export function SkillWorkspace({
                         />
                       </div>
                       <div className="space-y-1">
-                        <label className="text-sm font-medium text-slate-700">目录标识</label>
+                        <label className="ui-chrome text-sm font-medium text-slate-700">目录标识</label>
                         <Input
                           value={draft.slug}
                           onChange={(event) =>
@@ -738,7 +742,7 @@ export function SkillWorkspace({
                         />
                       </div>
                       <div className="space-y-1">
-                        <label className="text-sm font-medium text-slate-700">描述</label>
+                        <label className="ui-chrome text-sm font-medium text-slate-700">描述</label>
                         <Textarea
                           rows={3}
                           value={draft.description}
@@ -751,7 +755,7 @@ export function SkillWorkspace({
                         />
                       </div>
                       <div className="space-y-1">
-                        <label className="text-sm font-medium text-slate-700">Markdown 正文</label>
+                        <label className="ui-chrome text-sm font-medium text-slate-700">Markdown 正文</label>
                         <Textarea
                           rows={18}
                           value={draft.bodyMarkdown}

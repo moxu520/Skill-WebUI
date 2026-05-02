@@ -63,7 +63,7 @@ export function DiscoverySettingsForm({
   return (
     <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex items-start justify-between gap-4">
-        <div>
+        <div className="ui-chrome">
           <h2 className="text-sm font-semibold text-slate-900">
             自定义扫描根目录
           </h2>
@@ -71,13 +71,13 @@ export function DiscoverySettingsForm({
             每行一个绝对路径。这里只影响自动发现候选，不会修改受管技能根目录。
           </p>
         </div>
-        <div className="rounded-md bg-slate-50 px-2.5 py-1 text-xs text-slate-500">
+        <div className="ui-chrome rounded-md bg-slate-50 px-2.5 py-1 text-xs text-slate-500">
           {previewCount} 个目录
         </div>
       </div>
 
       <div className="mt-4 space-y-2">
-        <label className="text-sm font-medium text-slate-700">
+        <label className="ui-chrome text-sm font-medium text-slate-700">
           额外扫描路径
         </label>
         <Textarea
