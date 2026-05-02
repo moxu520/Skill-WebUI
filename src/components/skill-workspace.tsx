@@ -51,6 +51,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/components/ui/toast";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Tooltip,
@@ -73,6 +74,22 @@ type SkillWorkspaceProps = {
 
 type SortMode = "updated" | "name";
 type ViewMode = "grid" | "list";
+
+/** 技能详情接口的成功返回结构。 */
+type SkillDetailResponse = {
+  skill: SkillDetail;
+};
+
+/** 技能列表接口的成功返回结构。 */
+type SkillsResponse = {
+  skills: SkillSummary[];
+};
+
+/** 子表单成功完成后回传给工作区的技能信息。 */
+type SkillActionResult = {
+  id: string;
+  name: string;
+};
 
 /** 将技能更新时间格式化为工作区统一使用的文本。 */
 function formatDate(input: string) {
@@ -129,6 +146,7 @@ export function SkillWorkspace({
   skillsRoot,
 }: SkillWorkspaceProps) {
   const router = useRouter();
+  const { toast } = useToast();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [skills, setSkills] = useState(initialSkills);
@@ -146,11 +164,19 @@ export function SkillWorkspace({
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const selectedId = searchParams.get("skill") ?? initialSelectedId ?? "";
+
+  /** 读取指定技能的详情数据。 */
+  async function fetchSkillDetail(skillId: string) {
+    const response = await fetch(`/api/skills/${encodeURIComponent(skillId)}`);
+    const payload = (await response.json()) as Partial<SkillDetailResponse> & {
+      error?: string;
+    };
+
+    return { response, payload };
+  }
 
   /** 当路由中的技能标识变化时，加载右侧详情面板数据。 */
   useEffect(() => {
@@ -162,10 +188,8 @@ export function SkillWorkspace({
 
     async function loadDetail() {
       setLoadingDetail(true);
-      setError("");
 
-      const response = await fetch(`/api/skills/${encodeURIComponent(selectedId)}`);
-      const payload = await response.json();
+      const { response, payload } = await fetchSkillDetail(selectedId);
 
       if (cancelled) {
         return;
@@ -173,7 +197,22 @@ export function SkillWorkspace({
 
       if (!response.ok) {
         setSelectedSkill(null);
-        setError(payload.error ?? "加载技能详情失败。");
+        toast({
+          title: "加载技能详情失败",
+          description: payload.error ?? "加载技能详情失败。",
+          variant: "error",
+        });
+        setLoadingDetail(false);
+        return;
+      }
+
+      if (!payload.skill) {
+        setSelectedSkill(null);
+        toast({
+          title: "加载技能详情失败",
+          description: "技能详情返回无效。",
+          variant: "error",
+        });
         setLoadingDetail(false);
         return;
       }
@@ -193,7 +232,7 @@ export function SkillWorkspace({
     return () => {
       cancelled = true;
     };
-  }, [selectedId]);
+  }, [selectedId, toast]);
 
   /** 根据搜索词和排序规则生成当前应显示的技能列表。 */
   const filteredSkills = useMemo(() => {
@@ -237,18 +276,66 @@ export function SkillWorkspace({
   /** 主动刷新受管技能列表。 */
   async function refreshSkills() {
     setRefreshing(true);
-    setError("");
 
     const response = await fetch("/api/skills");
-    const payload = await response.json();
+    const payload = (await response.json()) as Partial<SkillsResponse> & {
+      error?: string;
+    };
 
     if (!response.ok) {
-      setError(payload.error ?? "刷新技能列表失败。");
+      toast({
+        title: "刷新技能列表失败",
+        description: payload.error ?? "刷新技能列表失败。",
+        variant: "error",
+      });
       setRefreshing(false);
       return;
     }
 
-    setSkills(payload.skills);
+    const nextSkills = payload.skills ?? [];
+    setSkills(nextSkills);
+
+    if (!selectedId) {
+      setRefreshing(false);
+      return;
+    }
+
+    const stillExists = nextSkills.some((skill) => skill.id === selectedId);
+
+    if (!stillExists) {
+      setSelectedSkill(null);
+      setDetailMode("preview");
+      updateQuery("");
+      setRefreshing(false);
+      return;
+    }
+
+    setLoadingDetail(true);
+    const detailResult = await fetchSkillDetail(selectedId);
+
+    if (!detailResult.response.ok) {
+      toast({
+        title: "刷新技能详情失败",
+        description: detailResult.payload.error ?? "刷新技能详情失败。",
+        variant: "error",
+      });
+      setLoadingDetail(false);
+      setRefreshing(false);
+      return;
+    }
+
+    if (detailResult.payload.skill) {
+      setSelectedSkill(detailResult.payload.skill);
+      setDraft({
+        name: detailResult.payload.skill.name,
+        description: detailResult.payload.skill.description,
+        bodyMarkdown: detailResult.payload.skill.bodyMarkdown,
+        slug: detailResult.payload.skill.id,
+      });
+      setDetailMode("preview");
+    }
+
+    setLoadingDetail(false);
     setRefreshing(false);
   }
 
@@ -259,8 +346,6 @@ export function SkillWorkspace({
     }
 
     setSaving(true);
-    setError("");
-    setMessage("");
 
     const response = await fetch(`/api/skills/${encodeURIComponent(selectedId)}`, {
       method: "PUT",
@@ -270,7 +355,11 @@ export function SkillWorkspace({
     const payload = await response.json();
 
     if (!response.ok) {
-      setError(payload.error ?? "更新技能失败。");
+      toast({
+        title: "保存技能失败",
+        description: payload.error ?? "更新技能失败。",
+        variant: "error",
+      });
       setSaving(false);
       return;
     }
@@ -278,7 +367,11 @@ export function SkillWorkspace({
     setSelectedSkill(payload.skill);
     setDetailMode("preview");
     setSaving(false);
-    setMessage("技能已保存。");
+    toast({
+      title: "技能已保存",
+      description: `已保存 ${payload.skill.name}。`,
+      variant: "success",
+    });
     await refreshSkills();
 
     if (payload.skill.id !== selectedId) {
@@ -298,12 +391,20 @@ export function SkillWorkspace({
     const payload = await response.json();
 
     if (!response.ok) {
-      setError(payload.error ?? "删除技能失败。");
+      toast({
+        title: "删除技能失败",
+        description: payload.error ?? "删除技能失败。",
+        variant: "error",
+      });
       return;
     }
 
     setSelectedSkill(null);
-    setMessage("技能已删除。");
+    toast({
+      title: "技能已删除",
+      description: `已删除 ${selectedId}。`,
+      variant: "success",
+    });
     updateQuery("");
     await refreshSkills();
   }
@@ -377,11 +478,15 @@ export function SkillWorkspace({
                     <SkillImportForm
                       compact
                       initialDiscoveredSkills={initialDiscoveredSkills}
-                      onSuccess={(skillId) => {
+                      onSuccess={(skill) => {
                         setImportOpen(false);
-                        setMessage("技能已导入。");
+                        toast({
+                          title: "技能已导入",
+                          description: `已导入 ${skill.name}。`,
+                          variant: "success",
+                        });
                         void refreshSkills();
-                        updateQuery(skillId);
+                        updateQuery(skill.id);
                       }}
                     />
                   </DialogContent>
@@ -400,7 +505,19 @@ export function SkillWorkspace({
                         创建一个新的本地技能，并立即写入 `SKILL.md`。
                       </DialogDescription>
                     </DialogHeader>
-                    <SkillCreateForm compact onSuccess={() => setCreateOpen(false)} />
+                    <SkillCreateForm
+                      compact
+                      onSuccess={(skill: SkillActionResult) => {
+                        setCreateOpen(false);
+                        toast({
+                          title: "技能已创建",
+                          description: `已创建 ${skill.name}。`,
+                          variant: "success",
+                        });
+                        void refreshSkills();
+                        updateQuery(skill.id);
+                      }}
+                    />
                   </DialogContent>
                 </Dialog>
               </div>
@@ -411,22 +528,6 @@ export function SkillWorkspace({
               <span className="truncate">{skillsRoot}</span>
             </div>
           </div>
-
-          {error ? (
-            <div className="px-5 pt-4 lg:px-8">
-              <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                {error}
-              </div>
-            </div>
-          ) : null}
-
-          {message ? (
-            <div className="px-5 pt-4 lg:px-8">
-              <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-                {message}
-              </div>
-            </div>
-          ) : null}
 
           <ScrollArea className="flex-1">
             <div
@@ -454,7 +555,6 @@ export function SkillWorkspace({
                           type="button"
                           className="min-w-0 text-left"
                           onClick={() => {
-                            setMessage("");
                             setDetailMode("preview");
                             updateQuery(skill.id);
                           }}

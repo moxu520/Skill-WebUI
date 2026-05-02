@@ -109,6 +109,19 @@ async function copyDirectory(source: string, target: string) {
   }
 }
 
+/** 校验目录中是否存在技能主文件，不存在时抛出明确错误。 */
+async function assertSkillFileExists(directory: string) {
+  try {
+    const fileStat = await stat(path.join(directory, SKILL_FILE));
+
+    if (!fileStat.isFile()) {
+      throw new Error("技能主文件不存在。");
+    }
+  } catch {
+    throw new Error("所选目录中不包含 SKILL.md。");
+  }
+}
+
 /** 将技能目录转换成列表页需要的轻量摘要。 */
 async function toSummary(id: string): Promise<SkillSummary | null> {
   try {
@@ -226,13 +239,7 @@ export async function importSkill(input: ImportSkillInput) {
     throw new Error("导入路径必须指向一个目录。");
   }
 
-  const skillFile = path.join(source, SKILL_FILE);
-
-  try {
-    await stat(skillFile);
-  } catch {
-    throw new Error("所选目录中不包含 SKILL.md。");
-  }
+  await assertSkillFileExists(source);
 
   const targetId = sanitizeSkillId(path.basename(source));
 
@@ -241,6 +248,14 @@ export async function importSkill(input: ImportSkillInput) {
   }
 
   const targetDir = resolveSkillDir(targetId);
-  await copyDirectory(source, targetDir);
-  return getSkill(targetId);
+
+  try {
+    await copyDirectory(source, targetDir);
+    await assertSkillFileExists(targetDir);
+    return await getSkill(targetId);
+  } catch (error) {
+    await rm(targetDir, { recursive: true, force: true });
+
+    throw error instanceof Error ? error : new Error("导入技能失败。");
+  }
 }

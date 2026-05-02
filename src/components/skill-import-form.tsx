@@ -6,9 +6,16 @@ import { Import, LoaderCircle, RefreshCw, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useToast } from "@/components/ui/toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import type { DiscoveredSkillSummary } from "@/lib/types";
+
+/** 嵌入式导入成功后回传给父层的技能信息。 */
+type ImportSuccessPayload = {
+  id: string;
+  name: string;
+};
 
 /** 将 ISO 时间格式化为界面可读的本地时间。 */
 function formatDate(input: string) {
@@ -46,16 +53,16 @@ export function SkillImportForm({
 }: {
   compact?: boolean;
   initialDiscoveredSkills?: DiscoveredSkillSummary[];
-  onSuccess?: (skillId: string) => void;
+  onSuccess?: (skill: ImportSuccessPayload) => void;
 }) {
   const router = useRouter();
+  const { toast } = useToast();
   const [sourcePath, setSourcePath] = useState("");
   const [mode, setMode] = useState("discover");
   const [discoveredSkills, setDiscoveredSkills] =
     useState<DiscoveredSkillSummary[]>(initialDiscoveredSkills);
   const [loadingDiscovered, setLoadingDiscovered] = useState(false);
   const [activeImportPath, setActiveImportPath] = useState("");
-  const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
   /** 判断给定来源路径是否正处于当前导入请求中。 */
@@ -66,13 +73,16 @@ export function SkillImportForm({
   /** 主动刷新自动发现候选列表。 */
   async function loadDiscoveredSkills() {
     setLoadingDiscovered(true);
-    setError("");
 
     const response = await fetch("/api/skills/discovery");
     const payload = await response.json();
 
     if (!response.ok) {
-      setError(payload.error ?? "加载扫描结果失败。");
+      toast({
+        title: "加载扫描结果失败",
+        description: payload.error ?? "加载扫描结果失败。",
+        variant: "error",
+      });
       setLoadingDiscovered(false);
       return;
     }
@@ -85,7 +95,6 @@ export function SkillImportForm({
   async function importFromPath(nextPath: string) {
     setSaving(true);
     setActiveImportPath(nextPath);
-    setError("");
 
     const response = await fetch("/api/skills/import", {
       method: "POST",
@@ -96,15 +105,31 @@ export function SkillImportForm({
     const payload = await response.json();
 
     if (!response.ok) {
-      setError(payload.error ?? "导入技能失败。");
+      const errorMessage = payload.error ?? "导入技能失败。";
+      toast({
+        title: "导入失败",
+        description: errorMessage,
+        variant: "error",
+      });
       setSaving(false);
       setActiveImportPath("");
       return;
     }
 
-    onSuccess?.(payload.skill.id);
-    router.push(`/skills?skill=${encodeURIComponent(payload.skill.id)}`);
-    router.refresh();
+    if (onSuccess) {
+      onSuccess({
+        id: payload.skill.id,
+        name: payload.skill.name,
+      });
+    } else {
+      toast({
+        title: "技能已导入",
+        description: `已导入 ${payload.skill.name}。`,
+        variant: "success",
+      });
+      router.push(`/skills?skill=${encodeURIComponent(payload.skill.id)}`);
+    }
+
     setSaving(false);
     setActiveImportPath("");
   }
@@ -288,11 +313,6 @@ export function SkillImportForm({
           </TabsContent>
         </Tabs>
 
-        {error ? (
-          <p className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-            {error}
-          </p>
-        ) : null}
       </section>
     </div>
   );

@@ -6,6 +6,13 @@ import { LoaderCircle, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/components/ui/toast";
+
+/** 新建技能成功后回传给父层的技能信息。 */
+type SkillCreateResult = {
+  id: string;
+  name: string;
+};
 
 /** 新建技能表单，支持页面态和弹窗态两种展示方式。 */
 export function SkillCreateForm({
@@ -13,9 +20,10 @@ export function SkillCreateForm({
   onSuccess,
 }: {
   compact?: boolean;
-  onSuccess?: () => void;
+  onSuccess?: (skill: SkillCreateResult) => void;
 }) {
   const router = useRouter();
+  const { toast } = useToast();
   const formClassName = compact
     ? "flex flex-col gap-5 p-5"
     : "mx-auto flex max-w-5xl flex-col gap-6 p-5 lg:p-8";
@@ -31,14 +39,12 @@ export function SkillCreateForm({
     bodyMarkdown: "",
     slug: "",
   });
-  const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
   /** 提交新技能创建请求，并在成功后跳转到详情视图。 */
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
-    setError("");
 
     const response = await fetch("/api/skills", {
       method: "POST",
@@ -49,14 +55,29 @@ export function SkillCreateForm({
     const payload = await response.json();
 
     if (!response.ok) {
-      setError(payload.error ?? "创建技能失败。");
+      toast({
+        title: "创建技能失败",
+        description: payload.error ?? "创建技能失败。",
+        variant: "error",
+      });
       setSaving(false);
       return;
     }
 
-    onSuccess?.();
-    router.push(`/skills?skill=${encodeURIComponent(payload.skill.id)}`);
-    router.refresh();
+    if (onSuccess) {
+      onSuccess({
+        id: payload.skill.id,
+        name: payload.skill.name,
+      });
+    } else {
+      toast({
+        title: "技能已创建",
+        description: `已创建 ${payload.skill.name}。`,
+        variant: "success",
+      });
+      router.push(`/skills?skill=${encodeURIComponent(payload.skill.id)}`);
+      router.refresh();
+    }
   }
 
   return (
@@ -98,11 +119,6 @@ export function SkillCreateForm({
               placeholder="用于列表卡片展示的简短描述"
             />
           </div>
-          {error ? (
-            <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              {error}
-            </p>
-          ) : null}
           <Button type="submit" disabled={saving} className="w-full">
             {saving ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
             创建技能

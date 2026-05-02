@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { ToasterProvider } from "@/components/ui/toaster";
 import "./globals.css";
 
 /** 应用级元信息，用于浏览器标题和页面描述。 */
@@ -19,7 +20,9 @@ export default function RootLayout({
       className="h-full bg-slate-50 antialiased"
       suppressHydrationWarning
     >
-      <body className="min-h-full font-sans text-slate-950">{children}</body>
+      <body className="min-h-full font-sans text-slate-950">
+        <ToasterProvider>{children}</ToasterProvider>
+      </body>
     </html>
   );
 }

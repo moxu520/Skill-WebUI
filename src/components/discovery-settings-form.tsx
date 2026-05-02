@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { LoaderCircle, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/components/ui/toast";
 
 /** 自动发现扫描设置表单，维护额外扫描根目录列表。 */
 export function DiscoverySettingsForm({
@@ -11,10 +12,9 @@ export function DiscoverySettingsForm({
 }: {
   initialExtraRoots: string[];
 }) {
+  const { toast } = useToast();
   const [value, setValue] = useState(initialExtraRoots.join("\n"));
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
 
   const previewCount = useMemo(
     () =>
@@ -28,8 +28,6 @@ export function DiscoverySettingsForm({
   /** 将当前文本框中的路径列表写回扫描配置文件。 */
   async function handleSave() {
     setSaving(true);
-    setError("");
-    setMessage("");
 
     const extraRoots = value
       .split(/\r?\n/)
@@ -44,13 +42,21 @@ export function DiscoverySettingsForm({
     const payload = await response.json();
 
     if (!response.ok) {
-      setError(payload.error ?? "保存扫描设置失败。");
+      toast({
+        title: "保存扫描设置失败",
+        description: payload.error ?? "保存扫描设置失败。",
+        variant: "error",
+      });
       setSaving(false);
       return;
     }
 
     setValue(payload.config.extraRoots.join("\n"));
-    setMessage("扫描根目录已更新。");
+    toast({
+      title: "扫描根目录已更新",
+      description: `已保存 ${payload.config.extraRoots.length} 个额外扫描目录。`,
+      variant: "success",
+    });
     setSaving(false);
   }
 
@@ -81,18 +87,6 @@ export function DiscoverySettingsForm({
           className="min-h-32 font-mono text-sm"
         />
       </div>
-
-      {error ? (
-        <p className="mt-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-          {error}
-        </p>
-      ) : null}
-
-      {message ? (
-        <p className="mt-4 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-          {message}
-        </p>
-      ) : null}
 
       <div className="mt-5 flex justify-end">
         <Button
