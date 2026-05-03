@@ -1,6 +1,7 @@
 import type { ComponentType } from "react";
 import {
   FolderSearch,
+  GitBranch,
   Languages,
   Settings2,
   Waypoints,
@@ -27,6 +28,12 @@ export const settingsNavigationItems: SettingsNavigationItem[] = [
     label: "技能发现",
     description: "自动扫描来源与额外根目录",
     icon: FolderSearch,
+  },
+  {
+    href: "/settings/git-sync",
+    label: "Git 配置",
+    description: "默认仓库、分支与本地同步配置",
+    icon: GitBranch,
   },
   {
     href: "/settings/model-providers",

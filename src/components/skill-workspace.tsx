@@ -3,8 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
+  ArrowDownToLine,
   ArrowUpDown,
+  ArrowUpToLine,
   Eye,
+  GitBranch,
   Grid2x2,
   List,
   LoaderCircle,
@@ -59,7 +62,13 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import type { SkillDetail, SkillSummary, DiscoveredSkillSummary } from "@/lib/types";
+import type {
+  SkillDetail,
+  SkillSummary,
+  DiscoveredSkillSummary,
+  SkillGitSyncActivity,
+  SkillGitSyncStatus,
+} from "@/lib/types";
 
 /**
  * 技能工作区组件，负责管理左侧技能列表、自动发现候选、右侧详情面板
@@ -89,6 +98,13 @@ type SkillDetailResponse = {
 /** 技能列表接口的成功返回结构。 */
 type SkillsResponse = {
   skills: SkillSummary[];
+};
+
+/** Git 同步接口返回的完整结果。 */
+type SkillGitSyncResponse = {
+  skill: SkillDetail;
+  gitSync: SkillGitSyncStatus;
+  activity: SkillGitSyncActivity;
 };
 
 /** 子表单成功完成后回传给工作区的技能信息。 */
@@ -142,6 +158,37 @@ function formatDate(input: string) {
   return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}`;
 }
 
+/** 将 Git 同步状态映射为用户可读标签。 */
+function formatGitStatusLabel(gitSync?: SkillGitSyncStatus) {
+  if (!gitSync) {
+    return "Git 未配置";
+  }
+
+  const labels = {
+    untracked: "未跟踪",
+    synced: "已同步",
+    local_changes: "待推送",
+    remote_changes: "待拉取",
+    diverged: "已分叉",
+    error: "异常",
+  } as const;
+
+  return labels[gitSync.status];
+}
+
+/** 为 Git 同步状态选择对应的徽标样式。 */
+function gitStatusVariant(gitSync?: SkillGitSyncStatus) {
+  if (!gitSync || gitSync.status === "untracked" || gitSync.status === "error") {
+    return "muted" as const;
+  }
+
+  if (gitSync.status === "synced") {
+    return "accent" as const;
+  }
+
+  return "default" as const;
+}
+
 /** 带提示文本的图标按钮，避免纯图标操作缺少语义。 */
 function IconButton({
   label,
@@ -185,6 +232,7 @@ export function SkillWorkspace({
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [syncAction, setSyncAction] = useState<"pull" | "push" | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [discoveredSkillsCache, setDiscoveredSkillsCache] = useState<
@@ -505,6 +553,50 @@ export function SkillWorkspace({
     }
   }
 
+  /** 触发单个技能的 Git 拉取或推送，并在完成后刷新列表与详情。 */
+  async function runGitSyncAction(action: "pull" | "push") {
+    if (!selectedId) {
+      return;
+    }
+
+    setSyncAction(action);
+
+    const response = await fetch(
+      `/api/skills/${encodeURIComponent(selectedId)}/git-sync/${action}`,
+      {
+        method: "POST",
+      },
+    );
+    const payload = (await response.json()) as Partial<SkillGitSyncResponse> & {
+      error?: string;
+    };
+
+    if (!response.ok || !payload.skill || !payload.gitSync || !payload.activity) {
+      toast({
+        title: action === "pull" ? "拉取失败" : "推送失败",
+        description: payload.error ?? "Git 同步失败。",
+        variant: "error",
+      });
+      setSyncAction(null);
+      return;
+    }
+
+    setSelectedSkill(payload.skill);
+    setDraft({
+      name: payload.skill.name,
+      description: payload.skill.description,
+      bodyMarkdown: payload.skill.bodyMarkdown,
+      slug: payload.skill.id,
+    });
+    toast({
+      title: action === "pull" ? "拉取完成" : "推送完成",
+      description: payload.activity.message,
+      variant: "success",
+    });
+    setSyncAction(null);
+    await refreshSkills();
+  }
+
   /** 删除当前选中的技能目录，并关闭对应详情。 */
   async function deleteSelectedSkill() {
     if (!selectedId) {
@@ -748,6 +840,17 @@ export function SkillWorkspace({
                           <p className="mt-1 line-clamp-2 text-sm text-slate-500">
                             {skill.description || "暂无描述"}
                           </p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <Badge variant={gitStatusVariant(skill.gitSync)}>
+                              {formatGitStatusLabel(skill.gitSync)}
+                            </Badge>
+                            {skill.gitSync?.enabled ? (
+                              <Badge variant="muted">
+                                <GitBranch className="mr-1 h-3 w-3" />
+                                {skill.gitSync.branch}
+                              </Badge>
+                            ) : null}
+                          </div>
                         </button>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
@@ -903,14 +1006,90 @@ export function SkillWorkspace({
                   {selectedSkill.assets.length ? (
                     <Badge variant="muted">{selectedSkill.assets.length} 个资源</Badge>
                   ) : null}
+                  <Badge variant={gitStatusVariant(selectedSkill.gitSync)}>
+                    {formatGitStatusLabel(selectedSkill.gitSync)}
+                  </Badge>
                 </div>
                 <div className="copy-content mt-4 rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-500">
                   {selectedSkill.path}
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void runGitSyncAction("pull")}
+                    disabled={!selectedSkill.gitSync?.enabled || syncAction !== null}
+                  >
+                    {syncAction === "pull" ? (
+                      <LoaderCircle className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <ArrowDownToLine className="h-4 w-4" />
+                    )}
+                    拉取
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void runGitSyncAction("push")}
+                    disabled={syncAction !== null}
+                  >
+                    {syncAction === "push" ? (
+                      <LoaderCircle className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <ArrowUpToLine className="h-4 w-4" />
+                    )}
+                    推送
+                  </Button>
                 </div>
               </div>
 
               <ScrollArea className="min-h-0 flex-1">
                 <div className="min-w-0 p-5">
+                  <section className="mb-5 rounded-lg border border-slate-200 bg-slate-50/70 p-4">
+                    <div className="flex items-center gap-2 text-sm font-medium text-slate-800">
+                      <GitBranch className="h-4 w-4" />
+                      Git 快捷操作
+                    </div>
+                    <p className="mt-2 text-xs text-slate-500">
+                      这里保留当前技能的状态查看和快捷拉取、推送。批量或双向主流程请使用左侧菜单中的 Git 同步模块。
+                    </p>
+                    <div className="mt-3 space-y-2 text-sm text-slate-600">
+                      <div className="flex items-start justify-between gap-3">
+                        <span className="ui-chrome text-slate-500">状态</span>
+                        <Badge variant={gitStatusVariant(selectedSkill.gitSync)}>
+                          {formatGitStatusLabel(selectedSkill.gitSync)}
+                        </Badge>
+                      </div>
+                      <div className="flex items-start justify-between gap-3">
+                        <span className="ui-chrome text-slate-500">仓库</span>
+                        <span className="copy-content max-w-[240px] break-all text-right font-mono text-xs text-slate-700">
+                          {selectedSkill.gitSync?.repositoryUrl || "未绑定"}
+                        </span>
+                      </div>
+                      <div className="flex items-start justify-between gap-3">
+                        <span className="ui-chrome text-slate-500">分支</span>
+                        <span className="copy-content font-mono text-xs text-slate-700">
+                          {selectedSkill.gitSync?.branch || "-"}
+                        </span>
+                      </div>
+                      <div className="flex items-start justify-between gap-3">
+                        <span className="ui-chrome text-slate-500">远端路径</span>
+                        <span className="copy-content max-w-[240px] break-all text-right font-mono text-xs text-slate-700">
+                          {selectedSkill.gitSync?.relativePath || "-"}
+                        </span>
+                      </div>
+                      <div className="flex items-start justify-between gap-3">
+                        <span className="ui-chrome text-slate-500">最近同步提交</span>
+                        <span className="copy-content max-w-[240px] break-all text-right font-mono text-xs text-slate-700">
+                          {selectedSkill.gitSync?.lastSyncedCommit || "-"}
+                        </span>
+                      </div>
+                    </div>
+                    {selectedSkill.gitSync?.message ? (
+                      <p className="mt-3 text-xs text-slate-500">{selectedSkill.gitSync.message}</p>
+                    ) : null}
+                  </section>
+
                   {detailMode === "preview" ? (
                     <div className="min-h-0 overflow-hidden pt-1">
                       <MarkdownViewer content={selectedSkill.contentMarkdown} />

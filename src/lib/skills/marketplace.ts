@@ -50,6 +50,8 @@ type SkillsShLeaderboardItem = {
   skillId: string;
   name: string;
   installs: number;
+  installsYesterday?: number;
+  change?: number;
 };
 
 /** 将榜单键统一编码成缓存可用的稳定字符串。 */
@@ -60,23 +62,6 @@ function createCollectionCacheKey(source: MarketSourceId, ranking: MarketRanking
 /** 将详情链接统一编码成缓存可用的稳定字符串。 */
 function createDetailCacheKey(source: MarketSourceId, skillUrl: string) {
   return `${source}:${skillUrl.trim()}`;
-}
-
-/** 将外部来源和榜单转换为人类可读的标题。 */
-export function getMarketRankingLabel(ranking: MarketRanking) {
-  if (ranking === "all_time") {
-    return "All Time";
-  }
-
-  if (ranking === "trending") {
-    return "Trending";
-  }
-
-  if (ranking === "hot") {
-    return "Hot";
-  }
-
-  return "Newest";
 }
 
 /** 将页码和页长规范化为安全可用的正整数。 */
@@ -274,6 +259,11 @@ function splitRepositorySource(source: string) {
   };
 }
 
+/** 从详情链接中提取最后一段 slug，并做与本地技能相同的规范化。 */
+function normalizeMarketSlug(input: string) {
+  return sanitizeSkillId(input.trim());
+}
+
 /** 将 skills.sh 榜单条目映射为工作区统一使用的市场摘要。 */
 function buildSummaryFromLeaderboardItem(
   item: SkillsShLeaderboardItem,
@@ -298,11 +288,14 @@ function buildSummaryFromLeaderboardItem(
     installCommand: `npx skills add ${repository.repositoryUrl} --skill ${item.skillId}`,
     description: "",
     tags: [],
-    weeklyInstalls: item.installs,
-    weeklyInstallsLabel: new Intl.NumberFormat("en-US", {
-      notation: "compact",
-      maximumFractionDigits: 1,
-    }).format(item.installs),
+    weeklyInstalls: ranking === "hot" ? (item.change ?? item.installs) : item.installs,
+    weeklyInstallsLabel:
+      ranking === "hot" && typeof item.change === "number"
+        ? `${item.change > 0 ? "+" : ""}${item.change}`
+        : new Intl.NumberFormat("en-US", {
+            notation: "compact",
+            maximumFractionDigits: 1,
+          }).format(item.installs),
     stars: null,
     starsLabel: "—",
     firstSeenAt: "",
@@ -314,28 +307,64 @@ function buildSummaryFromLeaderboardItem(
   };
 }
 
-/** 通过 skills.sh 榜单页的 flight 数据提取轻量列表信息。 */
-function parseSkillsShLeaderboardPage(html: string, ranking: MarketRanking) {
+/** 通过 skills.sh 页面内嵌数据提取榜单条目，兼容 all_time / trending / hot 三种结构。 */
+function parseSkillsShEmbeddedLeaderboardItems(html: string) {
   const matches = [
     ...html.matchAll(
-      /\{\\\"source\\\":\\\"([^\\"]+)\\\",\\\"skillId\\\":\\\"([^\\"]+)\\\",\\\"name\\\":\\\"([^\\"]+)\\\",\\\"installs\\\":([0-9]+)\}/g,
+      /\{\\\"source\\\":\\\"([^\\"]+)\\\",\\\"skillId\\\":\\\"([^\\"]+)\\\",\\\"name\\\":\\\"([^\\"]+)\\\",\\\"installs\\\":([0-9]+)(?:,\\\"installsYesterday\\\":([0-9]+),\\\"change\\\":(-?[0-9]+))?\}/g,
     ),
   ];
 
-  if (!matches.length) {
+  return matches.map(
+    (match): SkillsShLeaderboardItem => ({
+      source: match[1],
+      skillId: match[2],
+      name: decodeHtmlEntities(match[3]),
+      installs: Number(match[4]),
+      installsYesterday: match[5] ? Number(match[5]) : undefined,
+      change: match[6] ? Number(match[6]) : undefined,
+    }),
+  );
+}
+
+/** 通过当前榜单页可见的列表锚点提取条目，作为内嵌数据失效时的回退方案。 */
+function parseSkillsShLeaderboardAnchors(html: string) {
+  const matches = [
+    ...html.matchAll(
+      /<a[^>]+href="(\/[^"/]+\/[^"/]+\/[^"]+)"[^>]*>[\s\S]*?<span class="text-sm lg:text-base text-\(--ds-gray-600\) font-mono">([0-9]+)<\/span>[\s\S]*?<h3[^>]*>([^<]+)<\/h3><p[^>]*>([^<]+)<\/p>[\s\S]*?<span class="font-mono text-sm text-foreground">([^<]+)<\/span>/g,
+    ),
+  ];
+
+  return matches.map((match): SkillsShLeaderboardItem => {
+    const repositoryLabel = decodeHtmlEntities(match[4].trim());
+    const [owner = "", repository = ""] = repositoryLabel.split("/", 2);
+    const skillPath = match[1].split("/").filter(Boolean);
+    const skillId = decodeHtmlEntities(skillPath.at(-1) ?? match[3].trim());
+
+    return {
+      source: owner && repository ? `${owner}/${repository}` : repositoryLabel,
+      skillId,
+      name: decodeHtmlEntities(match[3].trim()),
+      installs: Number.parseInt(match[5].replace(/[^0-9-]/g, ""), 10) || 0,
+    };
+  });
+}
+
+/** 通过 skills.sh 榜单页内容提取轻量列表信息。 */
+function parseSkillsShLeaderboardPage(html: string, ranking: MarketRanking) {
+  const embeddedItems = parseSkillsShEmbeddedLeaderboardItems(html);
+  const anchorItems = parseSkillsShLeaderboardAnchors(html);
+  const items = embeddedItems.length >= anchorItems.length ? embeddedItems : anchorItems;
+
+  if (!items.length) {
     throw new Error("无法解析技能市场榜单数据。");
   }
 
   const updatedAt = new Date().toISOString();
 
-  return matches.map((match, index) =>
+  return items.map((item, index) =>
     buildSummaryFromLeaderboardItem(
-      {
-        source: match[1],
-        skillId: match[2],
-        name: decodeHtmlEntities(match[3]),
-        installs: Number(match[4]),
-      },
+      item,
       ranking,
       index + 1,
       updatedAt,
@@ -772,17 +801,63 @@ export async function importMarketplaceSkill(input: {
 
   const targetSlug = sanitizeSkillId(detail.slug);
   const discovery = await discoverGitSkills(detail.repositoryUrl);
-  const matched = discovery.skills.filter((skill) => skill.id === targetSlug);
+  const detailUrlSlug = normalizeMarketSlug(parseSkillUrl(detail.detailUrl).slug);
+  const detailNameSlug = normalizeMarketSlug(detail.name);
+  type DiscoveredGitSkill = Awaited<ReturnType<typeof discoverGitSkills>>["skills"][number];
 
-  if (!matched.length) {
-    throw new Error("仓库扫描完成，但没有找到与市场条目完全匹配的技能目录。");
+  /** 收集单个候选技能可用于市场匹配的稳定键。 */
+  function collectSkillMatchKeys(skill: DiscoveredGitSkill) {
+    const keys = new Set<string>([skill.id]);
+
+    if (skill.relativeSkillPath) {
+      keys.add(normalizeMarketSlug(path.basename(skill.relativeSkillPath)));
+    }
+
+    if (skill.sourcePath) {
+      keys.add(normalizeMarketSlug(path.basename(skill.sourcePath)));
+    }
+
+    if (skill.name.trim()) {
+      keys.add(normalizeMarketSlug(skill.name));
+    }
+
+    return keys;
   }
 
-  if (matched.length > 1) {
-    throw new Error("仓库内存在多个同名技能目录，无法安全导入。");
+  /** 以受控优先级解析市场条目在仓库扫描结果中的唯一候选。 */
+  function resolveCandidate() {
+    const slugKeys = new Set([targetSlug, detailUrlSlug].filter(Boolean));
+    const nameKeys = new Set([detailNameSlug].filter(Boolean));
+    const slugMatches = discovery.skills.filter((skill) => {
+      const keys = collectSkillMatchKeys(skill);
+      return [...slugKeys].some((key) => keys.has(key));
+    });
+
+    if (slugMatches.length === 1) {
+      return slugMatches[0];
+    }
+
+    if (slugMatches.length > 1) {
+      throw new Error("仓库内存在多个与市场条目 slug 相符的技能目录，无法安全导入。");
+    }
+
+    const nameMatches = discovery.skills.filter((skill) => {
+      const keys = collectSkillMatchKeys(skill);
+      return [...nameKeys].some((key) => keys.has(key));
+    });
+
+    if (nameMatches.length === 1) {
+      return nameMatches[0];
+    }
+
+    if (nameMatches.length > 1) {
+      throw new Error("仓库内存在多个与市场条目名称相符的技能目录，无法安全导入。");
+    }
+
+    throw new Error("仓库扫描完成，但没有找到与市场条目匹配的技能目录。");
   }
 
-  const candidate = matched[0];
+  const candidate = resolveCandidate();
 
   if (candidate.status !== "importable") {
     throw new Error(candidate.statusReason);

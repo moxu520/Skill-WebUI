@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/toast";
-import type { DiscoveredSkillSummary } from "@/lib/types";
+import type { DiscoveredSkillSummary, GitSyncConfig } from "@/lib/types";
 
 /** 嵌入式导入成功后回传给父层的技能信息。 */
 type ImportSuccessPayload = {
@@ -34,6 +34,8 @@ type ImportApiResponse = {
 type GitDiscoveryResponse = {
   sessionId: string;
   repositoryUrl: string;
+  branch: string;
+  lastSyncedCommit?: string;
   skills: DiscoveredSkillSummary[];
 };
 
@@ -163,6 +165,7 @@ function ImportCandidateList({
                 {skill.sourceKind === "git" && skill.repositoryUrl ? (
                   <div className="copy-content mt-3 rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-500">
                     <div className="truncate font-mono">{skill.repositoryUrl}</div>
+                    {skill.branch ? <div className="mt-1 font-mono">{skill.branch}</div> : null}
                     <div className="mt-1 font-mono">{getCandidateLocation(skill)}</div>
                   </div>
                 ) : (
@@ -207,6 +210,7 @@ export function SkillImportForm({
   const { toast } = useToast();
   const [sourcePath, setSourcePath] = useState("");
   const [repositoryUrl, setRepositoryUrl] = useState("");
+  const [repositoryBranch, setRepositoryBranch] = useState("");
   const [mode, setMode] = useState("discover");
   const [discoveredSkills, setDiscoveredSkills] =
     useState<DiscoveredSkillSummary[]>(initialDiscoveredSkills);
@@ -218,6 +222,31 @@ export function SkillImportForm({
   const [gitProgress, setGitProgress] = useState<GitProgressState | null>(null);
   const importableGitSkills = gitSkills.filter((skill) => skill.status === "importable");
   const hasLoadedDiscoveredRef = useRef(initialDiscoveredSkills.length > 0);
+
+  /** 首次挂载时读取全局 Git 配置，作为仓库扫描的默认值。 */
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadGitConfig() {
+      const response = await fetch("/api/settings/git-sync");
+      const payload = (await response.json()) as {
+        config?: GitSyncConfig;
+      };
+
+      if (cancelled || !response.ok || !payload.config) {
+        return;
+      }
+
+      setRepositoryUrl((current) => current || payload.config?.repositoryUrl || "");
+      setRepositoryBranch((current) => current || payload.config?.branch || "");
+    }
+
+    void loadGitConfig();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   /** 在导入成功后关闭本次流程，并跳转或回传结果。 */
   function handleImportSuccess(skill: ImportSuccessPayload) {
@@ -347,7 +376,7 @@ export function SkillImportForm({
     const response = await fetch("/api/skills/import/git/discover", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ repositoryUrl }),
+      body: JSON.stringify({ repositoryUrl, branch: repositoryBranch }),
     });
     setGitProgress({
       current: 2,
@@ -370,6 +399,7 @@ export function SkillImportForm({
     }
 
     setGitSkills(payload.skills);
+    setRepositoryBranch(payload.branch ?? repositoryBranch);
     setLoadingGitSkills(false);
     setGitProgress({
       current: 3,
@@ -405,6 +435,9 @@ export function SkillImportForm({
         sourceType: "git",
         sessionId: skill.sessionId,
         relativeSkillPath: skill.relativeSkillPath,
+        repositoryUrl: skill.repositoryUrl,
+        branch: skill.branch,
+        lastSyncedCommit: skill.lastSyncedCommit,
       },
       getCandidateKey(skill),
     );
@@ -449,6 +482,9 @@ export function SkillImportForm({
         sourceType: "git",
         sessionId: skill.sessionId,
         relativeSkillPath: skill.relativeSkillPath,
+        repositoryUrl: skill.repositoryUrl,
+        branch: skill.branch,
+        lastSyncedCommit: skill.lastSyncedCommit,
       });
 
       if (result.skill) {
@@ -690,7 +726,7 @@ export function SkillImportForm({
                   </Button>
                 </div>
                 <p className="text-sm text-slate-500">
-                  只扫描默认分支，自动递归查找仓库内所有 `SKILL.md` 与 `skill.md`。
+                  使用当前默认分支 `{repositoryBranch || "master"}` 扫描，自动递归查找仓库内所有 `SKILL.md` 与 `skill.md`。
                 </p>
                 {gitProgress ? (
                   <div className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">

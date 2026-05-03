@@ -5,6 +5,7 @@ export type SkillSummary = {
   description: string;
   path: string;
   updatedAt: string;
+  gitSync?: SkillGitSyncStatus;
 };
 
 /** 详情页使用的完整技能信息。 */
@@ -12,6 +13,69 @@ export type SkillDetail = SkillSummary & {
   contentMarkdown: string;
   bodyMarkdown: string;
   assets: string[];
+};
+
+/** Git 同步配置的持久化结构。 */
+export type GitSyncConfig = {
+  repositoryUrl: string;
+  branch: string;
+  baseDirectory: string;
+  authorName?: string;
+  authorEmail?: string;
+  commitMessageTemplate?: string;
+};
+
+/** 单个 Skill 的 Git 跟踪绑定信息。 */
+export type SkillGitBinding = {
+  repositoryUrl: string;
+  branch: string;
+  relativePath: string;
+  lastSyncedCommit?: string;
+  trackingEnabled: boolean;
+  lastSyncedSignature?: string;
+};
+
+/** Skill 当前的 Git 同步状态枚举。 */
+export type SkillGitSyncState =
+  | "untracked"
+  | "synced"
+  | "local_changes"
+  | "remote_changes"
+  | "diverged"
+  | "error";
+
+/** Skill 对外暴露的 Git 同步状态。 */
+export type SkillGitSyncStatus = {
+  enabled: boolean;
+  repositoryUrl: string;
+  branch: string;
+  relativePath: string;
+  status: SkillGitSyncState;
+  lastSyncedCommit?: string;
+  message?: string;
+};
+
+/** Skill 内部元数据文件的结构。 */
+export type SkillInternalMetadata = {
+  git?: SkillGitBinding;
+};
+
+/** 单次 Git 同步操作的摘要信息。 */
+export type SkillGitSyncActivity = {
+  action: "push" | "pull";
+  commit?: string;
+  message: string;
+  updatedAt: string;
+};
+
+/** Git 推送过程中的固定阶段标识。 */
+export type GitPushStep = "prepare" | "commit" | "push";
+
+/** Git 推送阶段进度事件。 */
+export type GitPushProgressEvent = {
+  step: GitPushStep;
+  title: string;
+  description: string;
 };
 
 /** 技能编辑草稿的公共字段。 */
@@ -37,13 +101,16 @@ export type GitImportSkillInput = {
   sourceType: "git";
   sessionId: string;
   relativeSkillPath: string;
+  repositoryUrl?: string;
+  branch?: string;
+  lastSyncedCommit?: string;
 };
 
 /** 技能导入接口支持的全部请求结构。 */
 export type ImportSkillInput = LocalImportSkillInput | GitImportSkillInput;
 
 /** 自动发现候选技能时的可用状态。 */
-export type DiscoveryStatus = "importable" | "conflict" | "invalid";
+export type DiscoveryStatus = "importable" | "managed" | "conflict" | "invalid";
 
 /** 自动发现列表中单个候选技能的摘要信息。 */
 export type DiscoveredSkillSummary = {
@@ -57,8 +124,10 @@ export type DiscoveredSkillSummary = {
   status: DiscoveryStatus;
   statusReason: string;
   repositoryUrl?: string;
+  branch?: string;
   relativeSkillPath?: string;
   sessionId?: string;
+  lastSyncedCommit?: string;
 };
 
 /** 扫描根目录配置的持久化结构。 */

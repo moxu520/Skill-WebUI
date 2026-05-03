@@ -14,6 +14,11 @@ type ToastInput = {
   title: string;
   description?: string;
   variant?: ToastVariant;
+  duration?: number;
+  progress?: {
+    current: number;
+    total: number;
+  };
 };
 
 /** 运行中 Toast 的完整状态。 */
@@ -24,7 +29,9 @@ type ToastRecord = ToastInput & {
 
 /** Toast 上下文暴露的操作接口。 */
 type ToastContextValue = {
-  toast: (input: ToastInput) => void;
+  toast: (input: ToastInput) => string;
+  updateToast: (id: string, input: ToastInput) => void;
+  dismissToast: (id: string) => void;
 };
 
 const ToastContext = createContext<ToastContextValue | null>(null);
@@ -60,7 +67,7 @@ export function ToasterProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ToastRecord[]>([]);
 
   /** 关闭并移除指定的 Toast。 */
-  const dismissToast = useCallback((id: string, open: boolean) => {
+  const handleToastOpenChange = useCallback((id: string, open: boolean) => {
     if (open) {
       return;
     }
@@ -74,19 +81,60 @@ export function ToasterProvider({ children }: { children: ReactNode }) {
       globalThis.crypto?.randomUUID?.() ??
       `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 
-    setToasts((current) => [
-      ...current,
-      {
+    setToasts((current) => {
+      const nextRecord: ToastRecord = {
         id,
         open: true,
         variant: input.variant ?? "default",
         title: input.title,
         description: input.description,
-      },
-    ]);
+        duration: input.duration,
+        progress: input.progress,
+      };
+
+      return [...current.filter((toastItem) => toastItem.id !== id), nextRecord];
+    });
+
+    return id;
   }, []);
 
-  const value = useMemo(() => ({ toast }), [toast]);
+  /** 更新指定 Toast 的文案和视觉类型。 */
+  const updateToast = useCallback((id: string, input: ToastInput) => {
+    setToasts((current) =>
+      current.map((toastItem) =>
+        toastItem.id === id
+          ? {
+              ...toastItem,
+              title: input.title,
+              description: input.description,
+              variant: input.variant ?? toastItem.variant,
+              duration: input.duration ?? toastItem.duration,
+              progress: input.progress ?? toastItem.progress,
+              open: true,
+            }
+          : toastItem,
+      ),
+    );
+  }, []);
+
+  /** 主动关闭指定 Toast。 */
+  const dismissToast = useCallback((id: string) => {
+    setToasts((current) =>
+      current.map((toastItem) =>
+        toastItem.id === id
+          ? {
+              ...toastItem,
+              open: false,
+            }
+          : toastItem,
+      ),
+    );
+  }, []);
+
+  const value = useMemo(
+    () => ({ toast, updateToast, dismissToast }),
+    [dismissToast, toast, updateToast],
+  );
 
   return (
     <ToastContext.Provider value={value}>
@@ -96,7 +144,8 @@ export function ToasterProvider({ children }: { children: ReactNode }) {
           <ToastPrimitive.Root
             key={toastItem.id}
             open={toastItem.open}
-            onOpenChange={(open) => dismissToast(toastItem.id, open)}
+            duration={toastItem.duration ?? 3500}
+            onOpenChange={(open) => handleToastOpenChange(toastItem.id, open)}
             className={cn(
               "group pointer-events-auto relative flex w-[min(360px,calc(100vw-24px))] items-start gap-3 overflow-hidden rounded-lg border p-4 shadow-lg backdrop-blur transition-all data-[state=closed]:animate-[fade-out_120ms_ease-in] data-[state=open]:animate-[fade-in_160ms_ease-out] data-[swipe=end]:animate-[fade-out_120ms_ease-in] data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)] data-[swipe=cancel]:translate-x-0 data-[swipe=cancel]:transition-transform data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)]",
               toastVariantClassName(toastItem.variant ?? "default"),
@@ -113,6 +162,29 @@ export function ToasterProvider({ children }: { children: ReactNode }) {
                 <ToastPrimitive.Description className="mt-1 text-sm text-slate-600">
                   {toastItem.description}
                 </ToastPrimitive.Description>
+              ) : null}
+              {toastItem.progress ? (
+                <div className="mt-3">
+                  <div className="h-1.5 overflow-hidden rounded-full bg-white/70">
+                    <div
+                      className="h-full rounded-full bg-slate-900 transition-[width] duration-300"
+                      style={{
+                        width: `${Math.max(
+                          8,
+                          Math.min(
+                            100,
+                            (toastItem.progress.current / Math.max(1, toastItem.progress.total)) *
+                              100,
+                          ),
+                        )}%`,
+                      }}
+                    />
+                  </div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    {Math.min(toastItem.progress.current, toastItem.progress.total)}/
+                    {toastItem.progress.total}
+                  </div>
+                </div>
               ) : null}
             </div>
             <ToastPrimitive.Close className="rounded-sm p-1 text-slate-400 transition hover:bg-white/60 hover:text-slate-700">
