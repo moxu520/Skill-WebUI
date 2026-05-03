@@ -105,29 +105,64 @@ async function createSessionDirectory() {
   return { sessionId, sessionDir, repositoryDir: resolveSessionRepositoryDir(sessionId) };
 }
 
+/** 判断克隆失败是否由远端不存在指定分支引起。 */
+function isMissingRemoteBranchError(stderr: string) {
+  const normalized = stderr.toLowerCase();
+
+  return normalized.includes("remote branch") && normalized.includes("not found");
+}
+
+/** 读取浅克隆后仓库当前实际检出的分支名。 */
+async function readCheckedOutBranch(repositoryDir: string) {
+  const { stdout } = await execFileAsync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
+    cwd: repositoryDir,
+    timeout: 5000,
+  });
+
+  return stdout.trim();
+}
+
 /** 通过系统 `git` 命令浅克隆目标仓库到指定目录。 */
 async function cloneRepository(
   repositoryUrl: string,
   repositoryDir: string,
   branch?: string,
 ) {
-  const args = ["clone", "--depth", "1"];
-
-  if (branch?.trim()) {
-    args.push("--branch", branch.trim());
-  }
-
-  args.push(repositoryUrl, repositoryDir);
+  const normalizedBranch = branch?.trim();
 
   try {
+    const args = ["clone", "--depth", "1"];
+
+    if (normalizedBranch) {
+      args.push("--branch", normalizedBranch);
+    }
+
+    args.push(repositoryUrl, repositoryDir);
     await execFileAsync("git", args, {
       timeout: 1000 * 60 * 2,
     });
   } catch (error) {
     const stderr = error instanceof Error && "stderr" in error ? String(error.stderr ?? "") : "";
+
+    if (normalizedBranch && isMissingRemoteBranchError(stderr)) {
+      await execFileAsync("git", ["clone", "--depth", "1", repositoryUrl, repositoryDir], {
+        timeout: 1000 * 60 * 2,
+      });
+
+      return {
+        branch: await readCheckedOutBranch(repositoryDir),
+        usedFallbackBranch: true,
+      };
+    }
+
     const message = stderr.trim() || "无法克隆该 Git 仓库。";
     throw new Error(message);
   }
+
+  return {
+    branch: normalizedBranch || (await readCheckedOutBranch(repositoryDir)),
+    usedFallbackBranch: false,
+  };
 }
 
 /** 在仓库目录中递归扫描所有 skill 根目录。 */
@@ -199,13 +234,14 @@ export async function discoverGitSkillsFromRepository(
   branch?: string,
 ) {
   const safeRepositoryUrl = validateRepositoryUrl(repositoryUrl);
-  const resolvedBranch = branch?.trim() || (await readGitSyncConfig()).branch;
+  const configuredBranch = branch?.trim() || (await readGitSyncConfig()).branch;
   await cleanupExpiredGitImportSessions();
 
   const { sessionId, sessionDir, repositoryDir } = await createSessionDirectory();
 
   try {
-    await cloneRepository(safeRepositoryUrl, repositoryDir, resolvedBranch);
+    const cloneResult = await cloneRepository(safeRepositoryUrl, repositoryDir, configuredBranch);
+    const resolvedBranch = cloneResult.branch;
     const { stdout } = await execFileAsync("git", ["rev-parse", "HEAD"], {
       cwd: repositoryDir,
       timeout: 5000,
@@ -284,7 +320,9 @@ export async function discoverGitSkillsFromRepository(
             sourceLabel: "Git 仓库",
             updatedAt,
             status: "importable",
-            statusReason: "可导入",
+            statusReason: cloneResult.usedFallbackBranch
+              ? `已自动回退到远端默认分支 ${resolvedBranch}。`
+              : "可导入",
             repositoryUrl: safeRepositoryUrl,
             branch: resolvedBranch,
             relativeSkillPath: candidate.relativeSkillPath,

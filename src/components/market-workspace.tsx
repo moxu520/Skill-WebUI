@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { useToast } from "@/components/ui/toast";
+import { getMarketRankingLabel } from "@/lib/market/ranking";
 import { cn } from "@/lib/utils";
 import type {
   MarketRanking,
@@ -90,15 +91,19 @@ const rankingOptions: Array<{
   label: string;
   icon: typeof TrendingUp;
 }> = [
-  { value: "trending", label: "Trending", icon: TrendingUp },
-  { value: "hot", label: "Hot", icon: Flame },
-  { value: "all_time", label: "All Time", icon: Download },
-  { value: "newest", label: "Newest", icon: RefreshCw },
+  { value: "trending", label: "趋势", icon: TrendingUp },
+  { value: "hot", label: "热门", icon: Flame },
+  { value: "all_time", label: "总榜", icon: Download },
+  { value: "newest", label: "最新", icon: RefreshCw },
 ];
 
-/** 将榜单值映射为界面显示标签。 */
-function getMarketRankingLabel(ranking: MarketRanking) {
-  return rankingOptions.find((option) => option.value === ranking)?.label ?? ranking;
+/** 返回榜单列表卡片中第一指标的中文标签。 */
+function getPrimaryMetricLabel(skill: MarketSkillSummary) {
+  if (skill.ranking === "hot") {
+    return `热度 ${skill.weeklyInstallsLabel}`;
+  }
+
+  return `周安装 ${skill.weeklyInstallsLabel}`;
 }
 
 /** 技能市场主工作区，负责榜单切换、详情拉取与一键导入。 */
@@ -541,13 +546,13 @@ export function MarketWorkspace({
                           <p className="text-sm text-slate-600">
                             {item.description
                               ? clampText(item.description, 150)
-                              : "该榜单条目暂未预加载描述，打开右侧详情后会补齐。"}
+                              : item.installCommand}
                           </p>
 
                           <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500">
-                            <span>Weekly {item.weeklyInstallsLabel}</span>
+                            <span>{getPrimaryMetricLabel(item)}</span>
                             <span>Stars {item.starsLabel}</span>
-                            <span>First Seen {item.firstSeenLabel}</span>
+                            <span>首次收录 {item.firstSeenLabel}</span>
                           </div>
                         </div>
 

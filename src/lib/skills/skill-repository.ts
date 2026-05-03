@@ -21,7 +21,6 @@ import {
   resolveGitSkillDirectory,
 } from "@/lib/skills/git-import";
 import {
-  attachImportedSkillGitBinding,
   getLocalSkillGitSyncStatus,
   getSkillGitSyncStatus,
   syncSkillGitBindingAfterRename,
@@ -314,10 +313,14 @@ export async function discoverGitSkills(repositoryUrl: string, branch?: string) 
 export async function importGitSkill(
   sessionId: string,
   relativeSkillPath: string,
-  repositoryUrl?: string,
-  branch?: string,
-  lastSyncedCommit?: string,
+  _repositoryUrl?: string,
+  _branch?: string,
+  _lastSyncedCommit?: string,
 ) {
+  void _repositoryUrl;
+  void _branch;
+  void _lastSyncedCommit;
+
   const source = await resolveGitSkillDirectory(sessionId, relativeSkillPath);
   await assertSkillFileExists(source);
 
@@ -333,16 +336,6 @@ export async function importGitSkill(
     await copyDirectory(source, targetDir);
     await normalizeImportedSkillFile(targetDir);
     await assertSkillFileExists(targetDir);
-    if (repositoryUrl && branch) {
-      await attachImportedSkillGitBinding(
-        targetId,
-        repositoryUrl,
-        branch,
-        relativeSkillPath,
-        lastSyncedCommit,
-      );
-    }
-
     return await getSkill(targetId);
   } catch (error) {
     await rm(targetDir, { recursive: true, force: true });

@@ -213,12 +213,40 @@ async function createBindingFromConfig(skillId: string, config: GitSyncConfig): 
   };
 }
 
+/** 判断技能当前绑定是否仍然指向全局 Git 设置对应的受管目标。 */
+function isManagedBinding(
+  binding: SkillGitBinding | undefined,
+  config: GitSyncConfig,
+  skillId: string,
+) {
+  if (!binding?.trackingEnabled) {
+    return false;
+  }
+
+  return (
+    binding.repositoryUrl === config.repositoryUrl &&
+    binding.branch === config.branch &&
+    binding.relativePath === normalizeRelativePath(path.posix.join(config.baseDirectory, skillId))
+  );
+}
+
+/** 统一解析当前技能实际应使用的同步绑定。 */
+async function resolveEffectiveBinding(prepared: PreparedSkillTarget) {
+  if (isManagedBinding(prepared.binding, prepared.config, prepared.skillId)) {
+    return prepared.binding;
+  }
+
+  return undefined;
+}
+
 /** 构造标准化的 Git 状态对象。 */
 async function buildSkillGitSyncStatus(
   prepared: PreparedSkillTarget,
   includeRemote = false,
 ): Promise<SkillGitSyncStatus> {
-  if (!prepared.binding?.trackingEnabled) {
+  const binding = await resolveEffectiveBinding(prepared);
+
+  if (!binding) {
     return {
       enabled: false,
       repositoryUrl: prepared.config.repositoryUrl,
@@ -227,11 +255,9 @@ async function buildSkillGitSyncStatus(
         path.posix.join(prepared.config.baseDirectory, prepared.skillId),
       ),
       status: "untracked",
-      message: "当前 Skill 尚未绑定远端仓库。",
+      message: "当前 Skill 尚未绑定到全局 Git 仓库，首次推送会发布到默认目标。",
     };
   }
-
-  const binding = prepared.binding;
   const currentSignature = await computeSkillContentSignature(prepared.directory);
   const hasLocalChanges =
     Boolean(binding.lastSyncedSignature) && binding.lastSyncedSignature !== currentSignature;
@@ -290,48 +316,24 @@ async function buildSkillGitSyncStatus(
   };
 }
 
-/** 为从 Git 导入的 Skill 建立跟踪信息并记录同步基线。 */
-export async function attachImportedSkillGitBinding(
-  skillId: string,
-  repositoryUrl: string,
-  branch: string,
-  relativePath: string,
-  lastSyncedCommit?: string,
-) {
-  const safeId = sanitizeSkillId(skillId);
-  const directory = resolveSkillDir(safeId);
-  const signature = await computeSkillContentSignature(directory);
-
-  await writeSkillGitBinding(directory, {
-    repositoryUrl: repositoryUrl.trim(),
-    branch: branch.trim(),
-    relativePath: normalizeRelativePath(relativePath),
-    trackingEnabled: true,
-    lastSyncedCommit: lastSyncedCommit?.trim() || undefined,
-    lastSyncedSignature: signature,
-  });
-}
-
 /** 当技能目录标识发生变化时，同步修正默认受管仓库下的远端路径。 */
 export async function syncSkillGitBindingAfterRename(previousId: string, nextId: string) {
   const nextDirectory = resolveSkillDir(nextId);
   const binding = await readSkillGitBinding(nextDirectory);
+  const config = await readGitSyncConfig();
 
-  if (!binding?.trackingEnabled) {
+  if (!isManagedBinding(binding, config, previousId)) {
     return;
   }
 
-  const config = await readGitSyncConfig();
-
-  if (
-    binding.repositoryUrl !== config.repositoryUrl ||
-    binding.relativePath !== normalizeRelativePath(path.posix.join(config.baseDirectory, previousId))
-  ) {
+  if (!binding) {
     return;
   }
 
   await writeSkillGitBinding(nextDirectory, {
     ...binding,
+    branch: config.branch,
+    repositoryUrl: config.repositoryUrl,
     relativePath: normalizeRelativePath(path.posix.join(config.baseDirectory, nextId)),
   });
 }
@@ -339,8 +341,12 @@ export async function syncSkillGitBindingAfterRename(previousId: string, nextId:
 /** 拉取远端 Skill 内容并更新本地同步基线。 */
 export async function pullSkillFromGit(skillId: string) {
   const prepared = await prepareSkillTarget(skillId);
-  const binding =
-    prepared.binding?.trackingEnabled ? prepared.binding : await createBindingFromConfig(skillId, prepared.config);
+  const binding = await resolveEffectiveBinding(prepared);
+
+  if (!binding) {
+    throw new Error("当前 Skill 尚未绑定到全局 Git 仓库，无法拉取。");
+  }
+
   const status = await buildSkillGitSyncStatus({ ...prepared, binding }, true);
 
   if (!binding.trackingEnabled || status.status === "untracked") {
@@ -410,8 +416,7 @@ export async function pullSkillFromGit(skillId: string) {
 /** 推送本地 Skill 到远端仓库，并刷新同步基线。 */
 export async function pushSkillToGit(skillId: string, options?: PushSkillToGitOptions) {
   const prepared = await prepareSkillTarget(skillId);
-  const binding =
-    prepared.binding?.trackingEnabled ? prepared.binding : await createBindingFromConfig(skillId, prepared.config);
+  const binding = (await resolveEffectiveBinding(prepared)) ?? (await createBindingFromConfig(skillId, prepared.config));
   const status = await buildSkillGitSyncStatus({ ...prepared, binding }, true);
 
   if (status.status === "remote_changes" || status.status === "diverged") {
