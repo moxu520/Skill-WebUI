@@ -5,6 +5,7 @@ import { mkdir, readdir, readFile, rename, rm, stat } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { skillsRoot } from "@/lib/skills/config";
+import { readGitSyncConfig } from "@/lib/skills/git-sync-config";
 import { sanitizeSkillId } from "@/lib/skills/path-guard";
 import { parseSkillMarkdown } from "@/lib/skills/skill-parser";
 import type { DiscoveredSkillSummary } from "@/lib/types";
@@ -105,9 +106,21 @@ async function createSessionDirectory() {
 }
 
 /** 通过系统 `git` 命令浅克隆目标仓库到指定目录。 */
-async function cloneRepository(repositoryUrl: string, repositoryDir: string) {
+async function cloneRepository(
+  repositoryUrl: string,
+  repositoryDir: string,
+  branch?: string,
+) {
+  const args = ["clone", "--depth", "1"];
+
+  if (branch?.trim()) {
+    args.push("--branch", branch.trim());
+  }
+
+  args.push(repositoryUrl, repositoryDir);
+
   try {
-    await execFileAsync("git", ["clone", "--depth", "1", repositoryUrl, repositoryDir], {
+    await execFileAsync("git", args, {
       timeout: 1000 * 60 * 2,
     });
   } catch (error) {
@@ -181,14 +194,23 @@ async function parseCandidateSkill(candidate: GitDiscoveryCandidate) {
 }
 
 /** 将 Git 扫描结果转换成前端可展示的候选技能摘要。 */
-export async function discoverGitSkillsFromRepository(repositoryUrl: string) {
+export async function discoverGitSkillsFromRepository(
+  repositoryUrl: string,
+  branch?: string,
+) {
   const safeRepositoryUrl = validateRepositoryUrl(repositoryUrl);
+  const resolvedBranch = branch?.trim() || (await readGitSyncConfig()).branch;
   await cleanupExpiredGitImportSessions();
 
   const { sessionId, sessionDir, repositoryDir } = await createSessionDirectory();
 
   try {
-    await cloneRepository(safeRepositoryUrl, repositoryDir);
+    await cloneRepository(safeRepositoryUrl, repositoryDir, resolvedBranch);
+    const { stdout } = await execFileAsync("git", ["rev-parse", "HEAD"], {
+      cwd: repositoryDir,
+      timeout: 5000,
+    });
+    const headCommit = stdout.trim();
 
     const [candidates, managedIds] = await Promise.all([
       scanRepositoryForSkills(repositoryDir),
@@ -227,8 +249,10 @@ export async function discoverGitSkillsFromRepository(repositoryUrl: string) {
               status: "conflict",
               statusReason: "同一仓库中存在同名技能目录。",
               repositoryUrl: safeRepositoryUrl,
+              branch: resolvedBranch,
               relativeSkillPath: candidate.relativeSkillPath,
               sessionId,
+              lastSyncedCommit: headCommit,
             };
           }
 
@@ -241,11 +265,13 @@ export async function discoverGitSkillsFromRepository(repositoryUrl: string) {
               sourceKind: "git",
               sourceLabel: "Git 仓库",
               updatedAt,
-              status: "conflict",
-              statusReason: "受管目录中已存在同名技能。",
+              status: "managed",
+              statusReason: "该 Skill 已在本地受管目录中，可继续拉取或推送。",
               repositoryUrl: safeRepositoryUrl,
+              branch: resolvedBranch,
               relativeSkillPath: candidate.relativeSkillPath,
               sessionId,
+              lastSyncedCommit: headCommit,
             };
           }
 
@@ -260,8 +286,10 @@ export async function discoverGitSkillsFromRepository(repositoryUrl: string) {
             status: "importable",
             statusReason: "可导入",
             repositoryUrl: safeRepositoryUrl,
+            branch: resolvedBranch,
             relativeSkillPath: candidate.relativeSkillPath,
             sessionId,
+            lastSyncedCommit: headCommit,
           };
         } catch (error) {
           return {
@@ -275,8 +303,10 @@ export async function discoverGitSkillsFromRepository(repositoryUrl: string) {
             status: "invalid",
             statusReason: error instanceof Error ? error.message : "无法读取这个技能目录。",
             repositoryUrl: safeRepositoryUrl,
+            branch: resolvedBranch,
             relativeSkillPath: candidate.relativeSkillPath,
             sessionId,
+            lastSyncedCommit: headCommit,
           };
         }
       }),
@@ -285,11 +315,14 @@ export async function discoverGitSkillsFromRepository(repositoryUrl: string) {
     return {
       sessionId,
       repositoryUrl: safeRepositoryUrl,
+      branch: resolvedBranch,
+      lastSyncedCommit: headCommit,
       skills: skills.sort((a, b) => {
         const statusOrder = {
           importable: 0,
-          conflict: 1,
-          invalid: 2,
+          managed: 1,
+          conflict: 2,
+          invalid: 3,
         } as const;
 
         return (

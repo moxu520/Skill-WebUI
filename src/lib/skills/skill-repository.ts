@@ -21,6 +21,13 @@ import {
   resolveGitSkillDirectory,
 } from "@/lib/skills/git-import";
 import {
+  attachImportedSkillGitBinding,
+  getLocalSkillGitSyncStatus,
+  getSkillGitSyncStatus,
+  syncSkillGitBindingAfterRename,
+} from "@/lib/skills/git-sync";
+import { SKILL_INTERNAL_METADATA_FILE } from "@/lib/skills/skill-metadata";
+import {
   assertInsideSkillsRoot,
   resolveSkillDir,
   sanitizeSkillId,
@@ -87,7 +94,12 @@ async function readSkillMarkdown(id: string) {
     raw,
     parsed,
     assets: directoryEntries
-      .filter((entry) => entry.name !== SKILL_FILE && entry.name !== "skill.md")
+      .filter(
+        (entry) =>
+          entry.name !== SKILL_FILE &&
+          entry.name !== "skill.md" &&
+          entry.name !== SKILL_INTERNAL_METADATA_FILE,
+      )
       .map((entry) => entry.name),
     updatedAt: skillStat.mtime.toISOString(),
   };
@@ -138,7 +150,10 @@ async function assertSkillFileExists(directory: string) {
 /** 将技能目录转换成列表页需要的轻量摘要。 */
 async function toSummary(id: string): Promise<SkillSummary | null> {
   try {
-    const { parsed, updatedAt } = await readSkillMarkdown(id);
+    const [{ parsed, updatedAt }, gitSync] = await Promise.all([
+      readSkillMarkdown(id),
+      getLocalSkillGitSyncStatus(id),
+    ]);
 
     return {
       id,
@@ -146,6 +161,7 @@ async function toSummary(id: string): Promise<SkillSummary | null> {
       description: parsed.description,
       path: path.relative(process.cwd(), resolveSkillDir(id)),
       updatedAt,
+      gitSync,
     };
   } catch {
     return null;
@@ -165,7 +181,10 @@ export async function listSkills() {
 /** 读取单个技能的完整详情，包括 Markdown 原文与资源列表。 */
 export async function getSkill(id: string): Promise<SkillDetail> {
   const safeId = sanitizeSkillId(id);
-  const { parsed, assets, updatedAt } = await readSkillMarkdown(safeId);
+  const [{ parsed, assets, updatedAt }, gitSync] = await Promise.all([
+    readSkillMarkdown(safeId),
+    getSkillGitSyncStatus(safeId),
+  ]);
 
   return {
     id: safeId,
@@ -180,6 +199,7 @@ export async function getSkill(id: string): Promise<SkillDetail> {
     }),
     bodyMarkdown: parsed.bodyMarkdown,
     assets,
+    gitSync,
   };
 }
 
@@ -225,6 +245,7 @@ export async function updateSkill(id: string, input: CreateSkillInput) {
     targetDir = assertInsideSkillsRoot(path.join(skillsRoot, desiredSlug));
     await rename(currentDir, targetDir);
     targetId = desiredSlug;
+    await syncSkillGitBindingAfterRename(safeId, targetId);
   }
 
   const markdown = buildSkillMarkdown({
@@ -246,7 +267,13 @@ export async function deleteSkill(id: string) {
 /** 从外部本地目录导入技能，并复制到受管目录中。 */
 export async function importSkill(input: ImportSkillInput) {
   if (input.sourceType === "git") {
-    return importGitSkill(input.sessionId, input.relativeSkillPath);
+    return importGitSkill(
+      input.sessionId,
+      input.relativeSkillPath,
+      input.repositoryUrl,
+      input.branch,
+      input.lastSyncedCommit,
+    );
   }
 
   const source = validateImportSource(input.sourcePath);
@@ -279,12 +306,18 @@ export async function importSkill(input: ImportSkillInput) {
 }
 
 /** 扫描 Git 仓库中的可导入技能目录，并返回候选列表。 */
-export async function discoverGitSkills(repositoryUrl: string) {
-  return discoverGitSkillsFromRepository(repositoryUrl);
+export async function discoverGitSkills(repositoryUrl: string, branch?: string) {
+  return discoverGitSkillsFromRepository(repositoryUrl, branch);
 }
 
 /** 从 Git 扫描会话中导入指定技能目录。 */
-export async function importGitSkill(sessionId: string, relativeSkillPath: string) {
+export async function importGitSkill(
+  sessionId: string,
+  relativeSkillPath: string,
+  repositoryUrl?: string,
+  branch?: string,
+  lastSyncedCommit?: string,
+) {
   const source = await resolveGitSkillDirectory(sessionId, relativeSkillPath);
   await assertSkillFileExists(source);
 
@@ -300,6 +333,16 @@ export async function importGitSkill(sessionId: string, relativeSkillPath: strin
     await copyDirectory(source, targetDir);
     await normalizeImportedSkillFile(targetDir);
     await assertSkillFileExists(targetDir);
+    if (repositoryUrl && branch) {
+      await attachImportedSkillGitBinding(
+        targetId,
+        repositoryUrl,
+        branch,
+        relativeSkillPath,
+        lastSyncedCommit,
+      );
+    }
+
     return await getSkill(targetId);
   } catch (error) {
     await rm(targetDir, { recursive: true, force: true });

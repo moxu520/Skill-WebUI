@@ -2,8 +2,8 @@ import Link from "next/link";
 import {
   AlertTriangle,
   Blocks,
-  GitBranch,
   Languages,
+  RefreshCw,
   Settings,
   Store,
 } from "lucide-react";
@@ -13,10 +13,10 @@ const primaryNavigation = [
   { href: "/skills", label: "技能", icon: Blocks },
   { href: "/market", label: "技能市场", icon: Store },
   { href: "/translate", label: "翻译技能", icon: Languages },
+  { href: "/sync/git-push", label: "多端同步", icon: RefreshCw },
 ];
 
 const upcomingNavigation = [
-  { label: "Git 同步", icon: GitBranch },
   { label: "风险检测", icon: AlertTriangle },
 ];
 

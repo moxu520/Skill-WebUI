@@ -148,8 +148,8 @@ async function toDiscoveredSummary(
         sourceKind: "discovered",
         sourceLabel: candidate.sourceLabel,
         updatedAt: skillStat.mtime.toISOString(),
-        status: "conflict",
-        statusReason: "受管目录中已存在同名技能。",
+        status: "managed",
+        statusReason: "该 Skill 已在本地受管目录中。",
       };
     }
 
@@ -215,12 +215,13 @@ export async function listDiscoveredSkills() {
       .map((candidate) => toDiscoveredSummary(candidate, managedIds)),
   );
 
-  return discovered.sort((a, b) => {
-    const statusOrder = {
-      importable: 0,
-      conflict: 1,
-      invalid: 2,
-    } as const;
+    return discovered.sort((a, b) => {
+      const statusOrder = {
+        importable: 0,
+        managed: 1,
+        conflict: 2,
+        invalid: 3,
+      } as const;
 
     return (
       statusOrder[a.status] - statusOrder[b.status] ||
