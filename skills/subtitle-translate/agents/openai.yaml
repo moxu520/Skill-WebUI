@@ -1,0 +1,4 @@
+interface:
+  display_name: "Subtitle Translate"
+  short_description: "Translate subtitle files while preserving timing."
+  default_prompt: "Translate subtitle files to Chinese while preserving subtitle timing and structure."
