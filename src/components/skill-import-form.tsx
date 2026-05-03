@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   GitBranch,
@@ -193,11 +193,13 @@ function ImportCandidateList({
 export function SkillImportForm({
   compact = false,
   initialDiscoveredSkills = [],
+  onDiscoveredSkillsChange,
   onBatchSuccess,
   onSuccess,
 }: {
   compact?: boolean;
   initialDiscoveredSkills?: DiscoveredSkillSummary[];
+  onDiscoveredSkillsChange?: (skills: DiscoveredSkillSummary[]) => void;
   onBatchSuccess?: (skills: ImportSuccessPayload[]) => void;
   onSuccess?: (skill: ImportSuccessPayload) => void;
 }) {
@@ -215,6 +217,7 @@ export function SkillImportForm({
   const [saving, setSaving] = useState(false);
   const [gitProgress, setGitProgress] = useState<GitProgressState | null>(null);
   const importableGitSkills = gitSkills.filter((skill) => skill.status === "importable");
+  const hasLoadedDiscoveredRef = useRef(initialDiscoveredSkills.length > 0);
 
   /** 在导入成功后关闭本次流程，并跳转或回传结果。 */
   function handleImportSuccess(skill: ImportSuccessPayload) {
@@ -297,7 +300,7 @@ export function SkillImportForm({
   }
 
   /** 主动刷新自动发现候选列表。 */
-  async function loadDiscoveredSkills() {
+  const loadDiscoveredSkills = useCallback(async () => {
     setLoadingDiscovered(true);
 
     const response = await fetch("/api/skills/discovery");
@@ -317,8 +320,20 @@ export function SkillImportForm({
     }
 
     setDiscoveredSkills(payload.skills);
+    onDiscoveredSkillsChange?.(payload.skills);
+    hasLoadedDiscoveredRef.current = true;
     setLoadingDiscovered(false);
-  }
+  }, [onDiscoveredSkillsChange, toast]);
+
+  /** 首次进入自动发现标签时再异步扫描，减少技能页首屏阻塞。 */
+  useEffect(() => {
+    if (mode !== "discover" || hasLoadedDiscoveredRef.current || loadingDiscovered) {
+      return;
+    }
+
+    hasLoadedDiscoveredRef.current = true;
+    void loadDiscoveredSkills();
+  }, [loadDiscoveredSkills, loadingDiscovered, mode]);
 
   /** 扫描 Git 仓库中的 skill 候选目录。 */
   async function loadGitSkills() {

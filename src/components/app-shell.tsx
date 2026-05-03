@@ -11,11 +11,11 @@ import { cn } from "@/lib/utils";
 
 const primaryNavigation = [
   { href: "/skills", label: "技能", icon: Blocks },
+  { href: "/market", label: "技能市场", icon: Store },
   { href: "/translate", label: "翻译技能", icon: Languages },
 ];
 
 const upcomingNavigation = [
-  { label: "技能市场", icon: Store },
   { label: "Git 同步", icon: GitBranch },
   { label: "风险检测", icon: AlertTriangle },
 ];
@@ -42,8 +42,8 @@ export function AppShell({
   children,
 }: AppShellProps) {
   return (
-    <div className="flex min-h-screen bg-slate-50 text-slate-900">
-      <aside className="ui-chrome hidden w-64 border-r border-slate-200/80 bg-white/80 px-4 py-5 lg:flex lg:flex-col">
+    <div className="flex h-screen overflow-hidden bg-slate-50 text-slate-900">
+      <aside className="ui-chrome hidden h-full w-64 border-r border-slate-200/80 bg-white/80 px-4 py-5 lg:flex lg:flex-col">
         <div className="px-3">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-900 text-white">
@@ -120,7 +120,7 @@ export function AppShell({
         </nav>
       </aside>
 
-      <div className="flex min-h-screen flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <header className="ui-chrome border-b border-slate-200/80 bg-white/80 backdrop-blur">
           <div className="flex flex-col gap-4 px-5 py-4 lg:px-8">
             <div className="flex flex-col gap-1">
@@ -130,7 +130,7 @@ export function AppShell({
             {toolbar ? <div>{toolbar}</div> : null}
           </div>
         </header>
-        <main className="flex-1">{children}</main>
+        <main className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</main>
       </div>
     </div>
   );
